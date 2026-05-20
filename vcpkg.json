@@ -1,0 +1,11 @@
+{
+  "name": "instrument-data",
+  "version-string": "1.0.0",
+  "description": "An cross OS shared memory platform for collecting scientific data from instruments",
+  "dependencies": [
+    {
+      "name": "glib"
+    }
+  ],
+  "builtin-baseline": "e5a1490e1409d175932ef6014519e9ae149ddb7c"
+}
