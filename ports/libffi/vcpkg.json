@@ -1,0 +1,9 @@
+{
+  "name": "libffi",
+  "version": "3.5.2",
+  "description": "Portable foreign-function interface library",
+  "homepage": "https://github.com/libffi/libffi",
+  "license": "MIT",
+  "supports": "!uwp",
+  "dependencies": []
+}
