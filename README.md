@@ -41,8 +41,8 @@ Data is stored in shared memory as typed arrays:
 Each buffer has:
 
 - A unique ID
-- A data region (shared memory)
-- A metadata region (also shared memory)
+- A data region
+- A metadata region
 
 ---
 
@@ -78,6 +78,7 @@ By default, the library supports zero-copy buffer creation:
 
 Example:
 
+```C
 double *ptr = NULL;
 
 gchar *id = data_manager_create_buffer_zero_copy(
@@ -90,7 +91,7 @@ gchar *id = data_manager_create_buffer_zero_copy(
 
 /*Write directly into shared memory*/
 ptr[0] = 42.0;
-
+```
 No intermediate copying is required, enabling maximum performance.
 
 ---
@@ -98,7 +99,7 @@ No intermediate copying is required, enabling maximum performance.
 ## Basic Usage
 
 ### Create a Buffer
-
+```C
 double data[10] = {1,2,3};
 
 gchar *id = data_manager_create_buffer(
@@ -108,28 +109,35 @@ gchar *id = data_manager_create_buffer(
     10,
     data
 );
+```
 
 ---
 
 ### Access a Buffer
 
+```C
 DataBuffer *buffer = data_manager_get_buffer(id);
 
 double *values = data_buffer_data(buffer);
+```
 
 ---
 
 ### Modify Data
 
+```C
 data_manager_add_offset(id, 5.0);
 data_manager_multiply_gain(id, 2.0);
+```
 
 ---
 
 ### Release a Buffer
 
+```C
 data_manager_release_buffer(id);
 g_free(id);
+```
 
 Buffers are automatically cleaned up when no processes are using them.
 
@@ -149,10 +157,9 @@ This project uses CMake.
 
 ### Build Steps
 
-mkdir build
-cd build
-cmake ..
-cmake --build .
+```bash
+make test
+```
 
 ---
 
@@ -169,7 +176,9 @@ The project includes:
 
 ### Run All Tests
 
-ctest --output-on-failure
+```
+make test
+```
 
 ---
 
@@ -191,8 +200,10 @@ Chaos stress: randomized concurrency + failure injection
 
 If tests hang or fail unexpectedly, you can manually clear IPC artifacts:
 
+```bash
 rm -f /dev/shm/sem.mtx_*
 rm -f /dev/shm/inst_*
+```
 
 ---
 
