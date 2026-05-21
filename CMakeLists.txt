@@ -128,6 +128,14 @@ install(FILES
   "${CMAKE_CURRENT_BINARY_DIR}/instrument-data-config-version.cmake"
   DESTINATION ${CMAKE_INSTALL_DATADIR}/instrument-data
 )
+configure_file(
+  cmake/instrument-data.pc.in
+  ${CMAKE_CURRENT_BINARY_DIR}/instrument-data.pc
+  @ONLY
+)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/instrument-data.pc
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
+)
 
 if(CMAKE_GENERATOR STREQUAL "Ninja" AND WIN32)
   file(TOUCH "${CMAKE_BINARY_DIR}/build.ninja")

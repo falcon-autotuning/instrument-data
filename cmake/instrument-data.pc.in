@@ -1,0 +1,9 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=${prefix}
+libdir=@CMAKE_INSTALL_FULL_LIBDIR@
+includedir=@CMAKE_INSTALL_FULL_INCLUDEDIR@
+Name: instrument-data
+Description: An cross OS shared memory platform for collecting scientific data from instruments
+Version: @PROJECT_VERSION@
+Libs: -L${libdir} -linstrument-data
+Cflags: -I${includedir}
