@@ -1,6 +1,7 @@
 #include "instrument-data.h"
 #include <glib.h>
 #include <signal.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -28,6 +29,41 @@ static int child_read(int argc, char **argv) {
   }
 
   return 3;
+}
+
+static int child_server(int argc, char **argv) {
+  (void)argc;
+  (void)argv;
+
+  double data[1] = {99.0};
+
+  gchar *id = data_manager_create_buffer("inst", "persistent",
+                                         INST_DATA_FLOAT64, 1, data);
+
+  if (!id) {
+    return 2;
+  }
+
+  /* send ID to parent */
+  g_print("%s\n", id);
+  fflush(stdout);
+
+  /* ✅ command loop */
+  char buf[32];
+
+  while (fgets(buf, sizeof(buf), stdin)) {
+    g_strchomp(buf);
+
+    if (g_strcmp0(buf, "quit") == 0) {
+      break;
+    }
+  }
+
+  /* release before exit */
+  data_manager_release_buffer(id);
+  g_free(id);
+
+  return 0;
 }
 
 static int child_write(int argc, char **argv) {
@@ -123,6 +159,7 @@ static ChildEntry child_table[] = {
     {"read", child_read},           {"write", child_write},
     {"crash", child_crash},         {"attach", child_attach},
     {"zero_copy", child_zero_copy}, {"write_kill", child_write_and_kill},
+    {"server", child_server},
 };
 
 /* ============================================================

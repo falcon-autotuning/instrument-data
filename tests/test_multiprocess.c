@@ -3,6 +3,9 @@
 #include <glib.h>
 #include <stddef.h>
 #include <string.h>
+#ifndef _WIN32
+#include <sys/wait.h>
+#endif
 static gboolean run_child(const char *mode, const char *id) {
 
   gchar *argv[] = {(gchar *)TEST_BINARY_PATH, "--child", (gchar *)mode,
@@ -44,6 +47,53 @@ static gboolean run_child(const char *mode, const char *id) {
 #else
   return status == 0;
 #endif
+}
+typedef struct {
+  GPid pid;
+  GIOChannel *in;  // write commands to child
+  GIOChannel *out; // read stdout
+} ChildProcess;
+
+static ChildProcess spawn_persistent_child(void) {
+  ChildProcess proc = {0};
+
+  gchar *argv[] = {(gchar *)TEST_BINARY_PATH, "--child", "server", NULL};
+
+  gint stdin_fd, stdout_fd;
+
+  GError *error = NULL;
+
+  if (!g_spawn_async_with_pipes(NULL, argv, NULL, G_SPAWN_DO_NOT_REAP_CHILD,
+                                NULL, NULL, &proc.pid, &stdin_fd, &stdout_fd,
+                                NULL, &error)) {
+    g_error("Failed to spawn persistent child: %s", error->message);
+  }
+
+  proc.in = g_io_channel_unix_new(stdin_fd);
+  proc.out = g_io_channel_unix_new(stdout_fd);
+
+  return proc;
+}
+static gchar *read_line(GIOChannel *ch) {
+  gchar *line = NULL;
+  gsize len = 0;
+  GError *error = NULL;
+
+  GIOStatus status = g_io_channel_read_line(ch, &line, &len, NULL, &error);
+
+  if (status != G_IO_STATUS_NORMAL) {
+    g_error("Failed to read from child");
+  }
+
+  g_strchomp(line);
+  return line;
+}
+static void send_command(GIOChannel *ch, const char *cmd) {
+  gsize written;
+
+  g_io_channel_write_chars(ch, cmd, -1, &written, NULL);
+  g_io_channel_write_chars(ch, "\n", 1, &written, NULL);
+  g_io_channel_flush(ch, NULL);
 }
 
 /* ============================================================
@@ -266,6 +316,43 @@ static void test_write_then_crash(void) {
   data_manager_release_buffer(id);
   g_free(id);
 }
+static void test_persistent_child_lifecycle(void) {
+
+  ChildProcess proc = spawn_persistent_child();
+
+  gchar *id = read_line(proc.out);
+  g_assert_nonnull(id);
+
+  DataBuffer *b = data_manager_get_buffer(id);
+  g_assert_nonnull(b);
+
+  double *d = data_buffer_data(b);
+  g_assert_cmpfloat(d[0], ==, 99.0);
+
+  send_command(proc.in, "quit");
+
+#ifndef _WIN32
+  int status = 0;
+  waitpid(proc.pid, &status, 0);
+  g_assert_true(WIFEXITED(status));
+  g_assert_cmpint(WEXITSTATUS(status), ==, 0);
+#else
+  /* best-effort: allow process to exit */
+  g_spawn_close_pid(proc.pid);
+#endif
+
+  DataBuffer *b2 = data_manager_get_buffer(id);
+  g_assert_nonnull(b2);
+
+  double *d2 = data_buffer_data(b2);
+  g_assert_cmpfloat(d2[0], ==, 99.0);
+
+  data_manager_release_buffer(id);
+  g_free(id);
+
+  g_io_channel_unref(proc.in);
+  g_io_channel_unref(proc.out);
+}
 
 /* ============================================================
  * REGISTER
@@ -280,4 +367,6 @@ void test_multiprocess_register(void) {
   g_test_add_func("/multiprocess/concurrent_writes", test_concurrent_writes);
   g_test_add_func("/multiprocess/race_open_release", test_race_open_release);
   g_test_add_func("/multiprocess/write_then_crash", test_write_then_crash);
+  g_test_add_func("/multiprocess/persistent_child",
+                  test_persistent_child_lifecycle);
 }
