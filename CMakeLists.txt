@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(
   instrument-data
-  VERSION 1.0.1
+  VERSION 1.0.2
   DESCRIPTION "An cross OS shared memory platform for collecting scientific data from instruments"
   HOMEPAGE_URL "https://github.com/falcon-autotuning/instrument-data"
   LANGUAGES C
