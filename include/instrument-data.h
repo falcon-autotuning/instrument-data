@@ -1,10 +1,5 @@
 #pragma once
 
-#include "instrument-data/instrument-data-export.h"
-#include <glib.h>
-#include <stddef.h>
-#include <stdint.h>
-
 /** Maximum length for string fields in metadata (including null terminator). */
 #define INST_MAX_STRING_LEN 64
 
@@ -14,6 +9,10 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+#include "instrument-data/instrument-data-export.h"
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 
 /**
  * @brief Supported data types for buffers.
@@ -42,16 +41,16 @@ typedef struct DataBuffer DataBuffer;
  * This struct resides in shared memory and is visible across processes.
  */
 typedef struct {
-  gchar buffer_id[INST_MAX_STRING_LEN];
-  gchar instrument_name[INST_MAX_STRING_LEN];
-  gchar command_id[INST_MAX_STRING_LEN];
+  char buffer_id[INST_MAX_STRING_LEN];
+  char instrument_name[INST_MAX_STRING_LEN];
+  char command_id[INST_MAX_STRING_LEN];
 
   ArrayType type;
 
   size_t element_count;
   size_t byte_size;
 
-  guint64 timestamp_ms;
+  uint64_t timestamp_ms;
 
   /**
    * @brief Number of active owning processes.
@@ -59,14 +58,14 @@ typedef struct {
    * This represents the global lifetime of the buffer. The buffer will
    * be destroyed when this reaches 0.
    */
-  volatile guint32 global_ref_count;
+  volatile uint32_t global_ref_count;
 
   /**
    * @brief List of owning process IDs.
    *
    * Used for crash-safe cleanup and ownership tracking.
    */
-  guint32 owners[INST_MAX_OWNERS];
+  uint32_t owners[INST_MAX_OWNERS];
 
 } SharedMetadata;
 
@@ -123,10 +122,11 @@ INSTRUMENT_DATA_EXPORT ArrayType data_buffer_type(const DataBuffer *buffer);
  *
  * @note The caller owns the returned string and must free it.
  */
-INSTRUMENT_DATA_EXPORT gchar *
-data_manager_create_buffer(const gchar *instrument, const gchar *command_id,
-                           ArrayType type, size_t element_count,
-                           const void *data);
+INSTRUMENT_DATA_EXPORT char *data_manager_create_buffer(const char *instrument,
+                                                        const char *command_id,
+                                                        ArrayType type,
+                                                        size_t element_count,
+                                                        const void *data);
 
 /**
  * @brief Create a buffer using zero-copy semantics.
@@ -147,9 +147,9 @@ data_manager_create_buffer(const gchar *instrument, const gchar *command_id,
  *
  * @note The returned pointer is shared across processes.
  */
-INSTRUMENT_DATA_EXPORT gchar *
-data_manager_create_buffer_zero_copy(const gchar *instrument,
-                                     const gchar *command_id, ArrayType type,
+INSTRUMENT_DATA_EXPORT char *
+data_manager_create_buffer_zero_copy(const char *instrument,
+                                     const char *command_id, ArrayType type,
                                      size_t element_count, void **out_ptr);
 
 /**
@@ -162,7 +162,7 @@ data_manager_create_buffer_zero_copy(const gchar *instrument,
  * This attaches the current process as an owner of the buffer.
  * The caller must eventually call data_manager_release_buffer().
  */
-INSTRUMENT_DATA_EXPORT DataBuffer *data_manager_get_buffer(const gchar *id);
+INSTRUMENT_DATA_EXPORT DataBuffer *data_manager_get_buffer(const char *id);
 
 /**
  * @brief Release a buffer previously obtained by this process.
@@ -175,7 +175,7 @@ INSTRUMENT_DATA_EXPORT DataBuffer *data_manager_get_buffer(const gchar *id);
  *
  * This does NOT immediately free memory if other processes still hold it.
  */
-INSTRUMENT_DATA_EXPORT void data_manager_release_buffer(const gchar *id);
+INSTRUMENT_DATA_EXPORT void data_manager_release_buffer(const char *id);
 
 /**
  * @brief Add a constant offset to all elements in the buffer.
@@ -187,8 +187,8 @@ INSTRUMENT_DATA_EXPORT void data_manager_release_buffer(const gchar *id);
  *
  * @note Only supports FLOAT32 and FLOAT64 buffers.
  */
-INSTRUMENT_DATA_EXPORT gboolean data_manager_add_offset(const gchar *id,
-                                                        double offset);
+INSTRUMENT_DATA_EXPORT bool data_manager_add_offset(const char *id,
+                                                    double offset);
 
 /**
  * @brief Multiply all elements in the buffer by a gain value.
@@ -200,8 +200,8 @@ INSTRUMENT_DATA_EXPORT gboolean data_manager_add_offset(const gchar *id,
  *
  * @note Only supports FLOAT32 and FLOAT64 buffers.
  */
-INSTRUMENT_DATA_EXPORT gboolean data_manager_multiply_gain(const gchar *id,
-                                                           double gain);
+INSTRUMENT_DATA_EXPORT bool data_manager_multiply_gain(const char *id,
+                                                       double gain);
 
 /**
  * @brief List all active buffer IDs.
@@ -211,7 +211,7 @@ INSTRUMENT_DATA_EXPORT gboolean data_manager_multiply_gain(const gchar *id,
  *
  * @note The caller must free the returned array and each string.
  */
-INSTRUMENT_DATA_EXPORT gchar **data_manager_list_buffers(size_t *count);
+INSTRUMENT_DATA_EXPORT char **data_manager_list_buffers(size_t *count);
 
 /**
  * @brief Get total memory usage across all buffers.
@@ -230,8 +230,8 @@ INSTRUMENT_DATA_EXPORT size_t data_manager_total_memory_usage(void);
  *
  * @note Metadata is copied from shared memory into @p out_meta.
  */
-INSTRUMENT_DATA_EXPORT gboolean
-data_manager_get_metadata(const gchar *id, SharedMetadata *out_meta);
+INSTRUMENT_DATA_EXPORT bool data_manager_get_metadata(const char *id,
+                                                      SharedMetadata *out_meta);
 
 #ifdef __cplusplus
 }

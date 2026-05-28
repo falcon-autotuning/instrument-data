@@ -157,7 +157,7 @@ gchar *data_manager_create_buffer_zero_copy(const gchar *instrument,
   return id;
 }
 
-DataBuffer *data_manager_get_buffer(const gchar *id) {
+DataBuffer *data_manager_get_buffer(const char *id) {
   init();
 
   g_mutex_lock(&lock);
@@ -274,7 +274,7 @@ void data_manager_release_buffer(const gchar *id) {
 
   data_buffer_unref(buffer);
 }
-gboolean data_manager_add_offset(const gchar *id, double offset) {
+bool data_manager_add_offset(const char *id, double offset) {
   if (!id) {
     return FALSE;
   }
@@ -317,7 +317,7 @@ gboolean data_manager_add_offset(const gchar *id, double offset) {
 
   return TRUE;
 }
-gboolean data_manager_multiply_gain(const gchar *id, double gain) {
+bool data_manager_multiply_gain(const char *id, double gain) {
   if (!id) {
     return FALSE;
   }
@@ -368,7 +368,7 @@ gchar **data_manager_list_buffers(size_t *count) {
 
 size_t data_manager_total_memory_usage(void) { return registry_total_memory(); }
 
-gboolean data_manager_get_metadata(const gchar *id, SharedMetadata *out_meta) {
+bool data_manager_get_metadata(const char *id, SharedMetadata *out_meta) {
   init();
 
   if (!id || !out_meta) {
