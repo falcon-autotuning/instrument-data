@@ -112,8 +112,10 @@ static DataBuffer *_get_buffer_internal(const char *id) {
   fprintf(stderr, "INTERNAL GET: id=%s\n", id);
 
   DataBuffer *b = lookup_buffer_no_lock(id);
-  if (b)
+  if (b) {
+    data_buffer_ref(b);
     return b;
+  }
 
   /* Build names */
   char *data_name = inst_build_shm_name(id, "data");
@@ -338,8 +340,6 @@ DataBuffer *data_manager_get_buffer(const char *id) {
     fprintf(stderr, "GET BUFFER FAILED: id=%s\n", safe_id);
     return NULL;
   }
-
-  data_buffer_ref(b);
 
   inst_ipc_mutex_lock(b->mutex);
 

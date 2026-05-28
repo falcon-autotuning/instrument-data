@@ -71,6 +71,8 @@ static ChildProcess spawn_persistent_child(void) {
 
   CreatePipe(&in_read, &in_write, &sa, 0);
   CreatePipe(&out_read, &out_write, &sa, 0);
+  SetHandleInformation(in_write, HANDLE_FLAG_INHERIT, 0);
+  SetHandleInformation(out_read, HANDLE_FLAG_INHERIT, 0);
 
   STARTUPINFO si = {0};
   si.cb = sizeof(si);
@@ -141,7 +143,11 @@ static char *read_line(ChildProcess *proc) {
   }
 
   buf[idx] = '\0';
+#ifdef _WIN32
+  return _strdup(buf);
+#else
   return strdup(buf);
+#endif
 }
 static void send_command(ChildProcess *proc, const char *cmd) {
 
@@ -382,9 +388,14 @@ static void test_persistent_child_lifecycle(void **state) {
   ChildProcess proc = spawn_persistent_child();
 
   char *id = read_line(&proc);
-  assert_non_null(id);
 
   DataBuffer *b = data_manager_get_buffer(id);
+  assert_non_null(b);
+
+  // tell child it's safe
+  send_command(&proc, "attached");
+
+  assert_non_null(b);
   double *d = data_buffer_data(b);
   assert_float_equal(d[0], 99.0, TEST_EPSILON);
 
@@ -397,12 +408,10 @@ static void test_persistent_child_lifecycle(void **state) {
   waitpid(proc.pid, &status, 0);
   assert_true(WIFEXITED(status));
 #endif
-
-  DataBuffer *b2 = data_manager_get_buffer(id);
-  assert_non_null(b2);
+  double *d2 = data_buffer_data(b);
+  assert_float_equal(d2[0], 99.0, TEST_EPSILON);
 
   data_manager_release_buffer(id);
-  free(id);
 }
 
 /* ============================================================

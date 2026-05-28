@@ -55,6 +55,7 @@ static int child_read(int argc, char **argv) {
 static int child_server(int argc, char **argv) {
   (void)argc;
   (void)argv;
+  setvbuf(stdout, NULL, _IONBF, 0);
 
   double data[1] = {99.0};
 
@@ -67,7 +68,9 @@ static int child_server(int argc, char **argv) {
   printf("%s\n", id);
   fflush(stdout);
 
+  // wait until parent confirms attach
   char buf[32];
+  fgets(buf, sizeof(buf), stdin);
 
   while (fgets(buf, sizeof(buf), stdin)) {
     str_chomp(buf);

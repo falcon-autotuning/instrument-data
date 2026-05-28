@@ -49,9 +49,21 @@ void *inst_shm_create(InstShmHandle *out, size_t size, const char *id,
   char *name = inst_build_shm_name(id, kind);
   if (!name)
     return NULL;
+  SECURITY_ATTRIBUTES sa;
+  SECURITY_DESCRIPTOR sd;
 
-  HANDLE h = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0,
-                               (DWORD)size, name);
+  InitializeSecurityDescriptor(&sd, SECURITY_DESCRIPTOR_REVISION);
+
+  // allow all access
+  SetSecurityDescriptorDacl(&sd, TRUE, NULL, FALSE);
+
+  sa.nLength = sizeof(sa);
+  sa.lpSecurityDescriptor = &sd;
+  sa.bInheritHandle = TRUE;
+
+  HANDLE h = CreateFileMapping(INVALID_HANDLE_VALUE,
+                               &sa, // ✅ NOT NULL
+                               PAGE_READWRITE, 0, size, name);
 
   if (!h) {
     fprintf(stderr, "CreateFileMapping failed (%s): %lu\n", name,
@@ -83,8 +95,21 @@ void *inst_shm_open_or_create(InstShmHandle *out, const char *name,
   if (size == 0)
     size = 1;
 
-  HANDLE h = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0,
-                               (DWORD)size, name);
+  SECURITY_ATTRIBUTES sa;
+  SECURITY_DESCRIPTOR sd;
+
+  InitializeSecurityDescriptor(&sd, SECURITY_DESCRIPTOR_REVISION);
+
+  // allow all access
+  SetSecurityDescriptorDacl(&sd, TRUE, NULL, FALSE);
+
+  sa.nLength = sizeof(sa);
+  sa.lpSecurityDescriptor = &sd;
+  sa.bInheritHandle = TRUE;
+
+  HANDLE h = CreateFileMapping(INVALID_HANDLE_VALUE,
+                               &sa, // ✅ NOT NULL
+                               PAGE_READWRITE, 0, size, name);
 
   if (!h) {
     fprintf(stderr, "CreateFileMapping(open_or_create) failed (%s): %lu\n",
@@ -131,6 +156,7 @@ void *inst_shm_map(InstShmHandle *h) {
 }
 
 void inst_shm_unmap(InstShmHandle *h, void *ptr) {
+  fprintf(stderr, "CLOSE HANDLE: %s\n", h->name);
   if (ptr)
     UnmapViewOfFile(ptr);
 
