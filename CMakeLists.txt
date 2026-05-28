@@ -43,6 +43,7 @@ if(USE_CCACHE)
 endif()
 
 find_path(UTHASH_INCLUDE_DIRS "utarray.h")
+find_package(Threads REQUIRED)
 
 add_library(instrument-data SHARED
   src/buffer.c
@@ -52,6 +53,15 @@ add_library(instrument-data SHARED
   src/process.c
   src/util.c
 )
+
+target_link_libraries(instrument-data 
+  PRIVATE
+    Threads::Threads
+)
+if(UNIX AND NOT APPLE)
+  target_link_libraries(instrument-data PRIVATE rt)
+endif()
+
 target_include_directories(instrument-data
   PRIVATE
     ${UTHASH_INCLUDE_DIRS}

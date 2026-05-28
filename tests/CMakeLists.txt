@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.20)
 
 project(instrument-data-tests LANGUAGES C)
 
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(GLIB REQUIRED IMPORTED_TARGET glib-2.0)
+find_package(cmocka CONFIG REQUIRED)
+find_package(Threads REQUIRED)
 
 file(GENERATE
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/test_config.h
@@ -22,19 +22,20 @@ add_executable(instrument-data-tests
 )
 
 target_include_directories(instrument-data-tests PRIVATE
-  ${GLIB_INCLUDE_DIRS}
   ${CMAKE_SOURCE_DIR}/include
   ${CMAKE_CURRENT_BINARY_DIR}
 )
 
-target_link_libraries(instrument-data-tests PRIVATE
-  instrument-data
-  PkgConfig::GLIB
+
+target_link_libraries(instrument-data-tests 
+  PRIVATE
+    instrument-data
+    cmocka::cmocka
+    Threads::Threads
 )
 
-# Needed on Linux for shared memory + semaphores
 if(UNIX AND NOT APPLE)
-  target_link_libraries(instrument-data-tests PRIVATE rt pthread)
+  target_link_libraries(instrument-data-tests PRIVATE rt)
 endif()
 
 # ============================================================
@@ -58,21 +59,23 @@ add_executable(instrument-data-stress-deterministic
 add_executable(instrument-data-stress-chaos
     stress_chaos.c)
 
-target_link_libraries(instrument-data-stress-deterministic PRIVATE
-  instrument-data
-  PkgConfig::GLIB
+target_link_libraries(instrument-data-stress-deterministic 
+  PRIVATE
+    instrument-data
+    cmocka::cmocka
+    Threads::Threads
 )
 target_include_directories(instrument-data-stress-deterministic PRIVATE
-  ${GLIB_INCLUDE_DIRS}
   ${CMAKE_SOURCE_DIR}/include
   ${CMAKE_CURRENT_BINARY_DIR}
 )
-target_link_libraries(instrument-data-stress-chaos PRIVATE
-  instrument-data
-  PkgConfig::GLIB
+target_link_libraries(instrument-data-stress-chaos
+  PRIVATE
+    instrument-data
+    cmocka::cmocka
+    Threads::Threads
 )
 target_include_directories(instrument-data-stress-chaos PRIVATE
-  ${GLIB_INCLUDE_DIRS}
   ${CMAKE_SOURCE_DIR}/include
   ${CMAKE_CURRENT_BINARY_DIR}
 )

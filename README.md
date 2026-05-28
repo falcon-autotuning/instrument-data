@@ -81,7 +81,7 @@ Example:
 ```C
 double *ptr = NULL;
 
-gchar *id = data_manager_create_buffer_zero_copy(
+char *id = data_manager_create_buffer_zero_copy(
     "instrument",
     "command",
     INST_DATA_FLOAT64,
@@ -92,6 +92,7 @@ gchar *id = data_manager_create_buffer_zero_copy(
 /*Write directly into shared memory*/
 ptr[0] = 42.0;
 ```
+
 No intermediate copying is required, enabling maximum performance.
 
 ---
@@ -99,10 +100,11 @@ No intermediate copying is required, enabling maximum performance.
 ## Basic Usage
 
 ### Create a Buffer
+
 ```C
 double data[10] = {1,2,3};
 
-gchar *id = data_manager_create_buffer(
+char *id = data_manager_create_buffer(
     "instrument",
     "cmd",
     INST_DATA_FLOAT64,
@@ -151,7 +153,8 @@ This project uses CMake.
 
 - C compiler with C99 support (clang or gcc)
 - CMake (3.16+ recommended)
-- GLib
+- Threads.h
+- uthash.h
 
 ---
 

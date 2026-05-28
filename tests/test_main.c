@@ -199,7 +199,6 @@ int main(int argc, char **argv) {
 #endif
 
   if (argc > 2 && str_eq(argv[1], "--child")) {
-
     const char *name = argv[2];
 
     for (size_t i = 0; i < sizeof(child_table) / sizeof(child_table[0]); i++) {
@@ -213,16 +212,36 @@ int main(int argc, char **argv) {
 
   cleanup_ipc();
 
-  /* Register tests */
-  extern void test_basic(void **);
-  extern void test_registry(void **);
-  extern void test_multiprocess(void **);
+  /* import test arrays */
+  extern const struct CMUnitTest test_basic_tests[];
+  extern const size_t test_basic_tests_count;
 
-  const struct CMUnitTest tests[] = {
-      cmocka_unit_test(test_basic),
-      cmocka_unit_test(test_registry),
-      cmocka_unit_test(test_multiprocess),
-  };
+  extern const struct CMUnitTest test_registry_tests[];
+  extern const size_t test_registry_tests_count;
 
-  return cmocka_run_group_tests(tests, NULL, NULL);
+  extern const struct CMUnitTest test_multiprocess_tests[];
+  extern const size_t test_multiprocess_tests_count;
+
+  size_t total = test_basic_tests_count + test_registry_tests_count +
+                 test_multiprocess_tests_count;
+
+  struct CMUnitTest *all = malloc(sizeof(struct CMUnitTest) * total);
+
+  size_t idx = 0;
+
+  memcpy(&all[idx], test_basic_tests,
+         test_basic_tests_count * sizeof(struct CMUnitTest));
+  idx += test_basic_tests_count;
+
+  memcpy(&all[idx], test_registry_tests,
+         test_registry_tests_count * sizeof(struct CMUnitTest));
+  idx += test_registry_tests_count;
+
+  memcpy(&all[idx], test_multiprocess_tests,
+         test_multiprocess_tests_count * sizeof(struct CMUnitTest));
+
+  int rc = _cmocka_run_group_tests("all_tests", all, total, NULL, NULL);
+
+  free(all);
+  return rc;
 }

@@ -1,6 +1,13 @@
 #include "instrument-data.h"
+#include "test_common.h"
 #include "test_config.h"
-#include <glib.h>
+
+#include <cmocka.h>
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <threads.h>
 
 #ifndef _WIN32
 #include <sys/wait.h>
@@ -11,30 +18,38 @@ typedef struct {
   int ops;
 } WorkerArgs;
 
-static gpointer worker_thread(gpointer data) {
+/* ============================================================
+ * Worker thread
+ * ============================================================ */
+
+static int worker_thread(void *data) {
   WorkerArgs *args = (WorkerArgs *)data;
+
+  char cmd[512];
 
   for (int i = 0; i < args->ops; i++) {
 
-    gchar *argv[] = {(gchar *)TEST_BINARY_PATH, "--child", "write",
-                     (gchar *)args->id, NULL};
+    /* build command line */
+    snprintf(cmd, sizeof(cmd), "%s --child write %s", TEST_BINARY_PATH,
+             args->id);
 
-    gint status = 0;
+    int status = system(cmd);
 
-    gboolean ok = g_spawn_sync(NULL, argv, NULL, G_SPAWN_SEARCH_PATH, NULL,
-                               NULL, NULL, NULL, &status, NULL);
-
-    g_assert_true(ok);
+    assert_true(status != -1);
 
 #ifndef _WIN32
-    g_assert_true(WIFEXITED(status) && WEXITSTATUS(status) == 0);
+    assert_true(WIFEXITED(status) && WEXITSTATUS(status) == 0);
 #else
-    g_assert_true(status == 0);
+    assert_true(status == 0);
 #endif
   }
 
-  return NULL;
+  return 0;
 }
+
+/* ============================================================
+ * MAIN
+ * ============================================================ */
 
 int main(void) {
 
@@ -42,39 +57,50 @@ int main(void) {
   const int OPS = 50;
   const size_t N = 100;
 
-  double *data = g_new0(double, N);
+  double *data = calloc(N, sizeof(double));
+  assert_non_null(data);
 
-  gchar *id =
+  char *id =
       data_manager_create_buffer("stress", "cmd", INST_DATA_FLOAT64, N, data);
 
-  g_free(data);
+  free(data);
 
-  GThread *threads[NUM_THREADS];
-  WorkerArgs args = {.id = id, .ops = OPS};
+  assert_non_null(id);
 
+  thrd_t threads[NUM_THREADS];
+  WorkerArgs args = {
+      .id = id,
+      .ops = OPS,
+  };
+
+  /* create threads */
   for (int i = 0; i < NUM_THREADS; i++) {
-    threads[i] = g_thread_new("worker", worker_thread, &args);
+    int rc = thrd_create(&threads[i], worker_thread, &args);
+    assert_int_equal(rc, thrd_success);
   }
 
+  /* join threads */
   for (int i = 0; i < NUM_THREADS; i++) {
-    g_thread_join(threads[i]);
+    int rc;
+    thrd_join(threads[i], &rc);
   }
 
+  /* verify results */
   DataBuffer *buffer = data_manager_get_buffer(id);
-  g_assert_nonnull(buffer);
+  assert_non_null(buffer);
 
   double *d = data_buffer_data(buffer);
 
   double expected = NUM_THREADS * OPS * 5.0;
 
   for (size_t i = 0; i < N; i++) {
-    g_assert_cmpfloat(d[i], ==, expected);
+    assert_float_equal(d[i], expected, TEST_EPSILON);
   }
 
-  g_print("✅ Deterministic stress passed: %.2f\n", d[0]);
+  printf("✅ Deterministic stress passed: %.2f\n", d[0]);
 
   data_manager_release_buffer(id);
-  g_free(id);
+  free(id);
 
   return 0;
 }

@@ -1,25 +1,61 @@
 #include "instrument-data.h"
 #include "test_config.h"
-#include <glib.h>
+
+#include <cmocka.h>
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <threads.h>
+#include <time.h>
 
 #ifndef _WIN32
 #include <sys/wait.h>
 #endif
 
 #define JITTER_US 1000 /* up to 1ms */
-#define ITERATIONS 10  /* will also be repeated via CTest */
+#define ITERATIONS 10
 
 typedef struct {
   const char *id;
   int ops;
 } WorkerArgs;
 
-static gpointer worker_thread(gpointer data) {
+/* ============================================================
+ * Helpers (GLib replacements)
+ * ============================================================ */
+
+static int str_eq(const char *a, const char *b) {
+  if (!a && !b)
+    return 1;
+  if (!a || !b)
+    return 0;
+  return strcmp(a, b) == 0;
+}
+
+/* simple random range */
+static int rand_range(int min, int max) { return min + rand() % (max - min); }
+
+/* sleep in microseconds */
+static void sleep_us(int us) {
+  struct timespec ts;
+  ts.tv_sec = us / 1000000;
+  ts.tv_nsec = (us % 1000000) * 1000;
+  thrd_sleep(&ts, NULL);
+}
+
+/* ============================================================
+ * Worker thread
+ * ============================================================ */
+
+static int worker_thread(void *data) {
   WorkerArgs *args = (WorkerArgs *)data;
+
+  char cmd[512];
 
   for (int i = 0; i < args->ops; i++) {
 
-    int r = g_random_int_range(0, 100);
+    int r = rand_range(0, 100);
 
     const char *mode;
     if (r < 70) {
@@ -30,68 +66,81 @@ static gpointer worker_thread(gpointer data) {
       mode = "write_kill";
     }
 
-    gchar *argv[] = {(gchar *)TEST_BINARY_PATH, "--child", (gchar *)mode,
-                     (gchar *)args->id, NULL};
+    sleep_us(rand_range(0, JITTER_US));
 
-    gint status = 0;
+    snprintf(cmd, sizeof(cmd), "%s --child %s %s", TEST_BINARY_PATH, mode,
+             args->id);
 
-    g_usleep(g_random_int_range(0, JITTER_US));
+    int status = system(cmd);
 
-    gboolean ok = g_spawn_sync(NULL, argv, NULL, G_SPAWN_SEARCH_PATH, NULL,
-                               NULL, NULL, NULL, &status, NULL);
-
-    g_assert_true(ok);
+    assert_true(status != -1);
 
 #ifndef _WIN32
-    /* write_kill exits non-zero → allow it */
-    if (g_strcmp0(mode, "write_kill") != 0) {
-      g_assert_true(WIFEXITED(status) && WEXITSTATUS(status) == 0);
+    /* write_kill intentionally exits non-zero */
+    if (!str_eq(mode, "write_kill")) {
+      assert_true(WIFEXITED(status) && WEXITSTATUS(status) == 0);
+    }
+#else
+    if (!str_eq(mode, "write_kill")) {
+      assert_true(status == 0);
     }
 #endif
   }
 
-  return NULL;
+  return 0;
 }
 
+/* ============================================================
+ * MAIN
+ * ============================================================ */
+
 int main(void) {
+
+  srand((unsigned int)time(NULL));
 
   const int NUM_THREADS = 8;
   const int OPS = 50;
   const size_t N = 100;
 
-  double *data = g_new0(double, N);
+  double *data = calloc(N, sizeof(double));
+  assert_non_null(data);
 
-  gchar *id =
+  char *id =
       data_manager_create_buffer("chaos", "cmd", INST_DATA_FLOAT64, N, data);
 
-  g_free(data);
+  free(data);
+  assert_non_null(id);
 
-  GThread *threads[NUM_THREADS];
+  thrd_t threads[NUM_THREADS];
   WorkerArgs args = {.id = id, .ops = OPS};
 
+  /* spawn threads */
   for (int i = 0; i < NUM_THREADS; i++) {
-    threads[i] = g_thread_new("chaos_worker", worker_thread, &args);
+    int rc = thrd_create(&threads[i], worker_thread, &args);
+    assert_int_equal(rc, thrd_success);
   }
 
+  /* join */
   for (int i = 0; i < NUM_THREADS; i++) {
-    g_thread_join(threads[i]);
+    int rc;
+    thrd_join(threads[i], &rc);
   }
 
+  /* validate buffer */
   DataBuffer *buffer = data_manager_get_buffer(id);
-  g_assert_nonnull(buffer);
+  assert_non_null(buffer);
 
   double *d = data_buffer_data(buffer);
 
-  /* ✅ relaxed validation */
   for (size_t i = 0; i < N; i++) {
-    g_assert_true(d[i] >= 0.0);
-    g_assert_true(d[i] <= (NUM_THREADS * OPS * 5.0));
+    assert_true(d[i] >= 0.0);
+    assert_true(d[i] <= (NUM_THREADS * OPS * 5.0));
   }
 
-  g_print("✅ Chaos stress completed (value: %.2f)\n", d[0]);
+  printf("✅ Chaos stress completed (value: %.2f)\n", d[0]);
 
   data_manager_release_buffer(id);
-  g_free(id);
+  free(id);
 
   return 0;
 }
