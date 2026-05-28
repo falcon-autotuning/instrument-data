@@ -1,6 +1,5 @@
 If:
   PathMatch: \.(c|h)$
-
 CompileFlags:
   Add:
     - -std=c99

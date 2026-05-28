@@ -88,3 +88,17 @@ foreach(i RANGE 1 15)
   add_test(NAME stress_chaos_${i}
            COMMAND instrument-data-stress-chaos)
 endforeach()
+
+function(copy_runtime_dll target)
+  if (WIN32)
+    add_custom_command(TARGET ${target} POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:instrument-data>
+        $<TARGET_FILE_DIR:${target}>
+    )
+  endif()
+endfunction()
+
+copy_runtime_dll(instrument-data-tests)
+copy_runtime_dll(instrument-data-stress-deterministic)
+copy_runtime_dll(instrument-data-stress-chaos)

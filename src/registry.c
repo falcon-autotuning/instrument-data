@@ -58,14 +58,10 @@ static void init_impl(void) {
   reg = inst_shm_open_or_create(&registry_shm, REG_NAME, sizeof(Registry));
   mutex = inst_ipc_mutex_create("inst_registry");
 
-  inst_ipc_mutex_lock(mutex);
-
   if (reg->magic != MAGIC) {
     memset(reg, 0, sizeof(Registry));
     reg->magic = MAGIC;
   }
-
-  inst_ipc_mutex_unlock(mutex);
 }
 
 static void init(void) { call_once(&init_once, init_impl); }

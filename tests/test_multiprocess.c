@@ -2,14 +2,17 @@
 #include "test_common.h"
 #include "test_config.h"
 #include <cmocka.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <threads.h>
-#include <unistd.h>
 #ifndef _WIN32
 #include <sys/wait.h>
+#include <unistd.h>
+#else
+#include <windows.h>
 #endif
 
 static int str_eq(const char *a, const char *b) {
