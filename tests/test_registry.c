@@ -19,8 +19,10 @@ static int str_eq(const char *a, const char *b) {
 static void test_list_buffers(void **state) {
   (void)state;
 
-  char *id1 = data_manager_create_buffer("a", "b", INST_DATA_UINT8, 10, NULL);
-  char *id2 = data_manager_create_buffer("a", "b", INST_DATA_UINT8, 10, NULL);
+  const char *id1 =
+      data_manager_create_buffer("a", "b", INST_DATA_UINT8, 10, NULL);
+  const char *id2 =
+      data_manager_create_buffer("a", "b", INST_DATA_UINT8, 10, NULL);
 
   size_t count = 0;
   char **list = data_manager_list_buffers(&count);
@@ -44,9 +46,6 @@ static void test_list_buffers(void **state) {
 
   assert_true(found1);
   assert_true(found2);
-
-  free(id1);
-  free(id2);
 }
 
 static void test_total_memory(void **state) {
@@ -54,14 +53,13 @@ static void test_total_memory(void **state) {
 
   size_t before = data_manager_total_memory_usage();
 
-  char *id = data_manager_create_buffer("a", "b", INST_DATA_UINT8, 100, NULL);
+  const char *id =
+      data_manager_create_buffer("a", "b", INST_DATA_UINT8, 100, NULL);
 
   size_t after = data_manager_total_memory_usage();
 
   /* replace g_assert_cmpint(after, >, before) */
   assert_true(after > before);
-
-  free(id);
 }
 
 /* ============================================================

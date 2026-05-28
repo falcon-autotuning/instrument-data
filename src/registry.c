@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <threads.h>
+#include <stdio.h>
 
 #define REG_NAME "/inst_registry"
 #define MAX_BUF 1024
@@ -71,6 +72,7 @@ static void init(void) { call_once(&init_once, init_impl); }
  * ============================================================ */
 
 void registry_add(DataBuffer *buf) {
+  fprintf(stderr, "REGISTRY ADD: id=%s\n", buf->id);
   init();
   inst_ipc_mutex_lock(mutex);
 
@@ -93,6 +95,8 @@ void registry_add(DataBuffer *buf) {
 }
 
 bool registry_find(const char *id, InstShmHandle *data, InstShmHandle *meta) {
+
+  fprintf(stderr, "REGISTRY FIND: searching id=%s\n", id);
   init();
   inst_ipc_mutex_lock(mutex);
 

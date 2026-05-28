@@ -59,8 +59,8 @@ static int child_server(int argc, char **argv) {
 
   double data[1] = {99.0};
 
-  char *id = data_manager_create_buffer("inst", "persistent", INST_DATA_FLOAT64,
-                                        1, data);
+  const char *id = data_manager_create_buffer("inst", "persistent",
+                                              INST_DATA_FLOAT64, 1, data);
 
   if (!id)
     return 2;
@@ -78,7 +78,6 @@ static int child_server(int argc, char **argv) {
   }
 
   data_manager_release_buffer(id);
-  free(id);
 
   return 0;
 }

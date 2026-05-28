@@ -1,6 +1,7 @@
 #include "internal/buffer.h"
 #include "internal/shm.h"
 #include <stdatomic.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 DataBuffer *data_buffer_ref(DataBuffer *buffer) {
@@ -35,7 +36,13 @@ void data_buffer_unref(DataBuffer *buffer) {
   }
 }
 
-void *data_buffer_data(DataBuffer *buffer) { return buffer->data; }
+void *data_buffer_data(DataBuffer *b) {
+  if (!b || !b->data) {
+    fprintf(stderr, "🔥 data_buffer_data NULL access\n");
+    return NULL;
+  }
+  return b->data;
+}
 
 size_t data_buffer_element_count(const DataBuffer *buffer) {
   return buffer->meta->element_count;

@@ -163,21 +163,20 @@ static void test_cross_process_read(void **state) {
   (void)state;
   double data[1] = {42.0};
 
-  char *id =
+  const char *id =
       data_manager_create_buffer("inst", "cmd", INST_DATA_FLOAT64, 1, data);
 
   bool ok = run_child("read", id);
   assert_true(ok);
 
   data_manager_release_buffer(id);
-  free(id);
 }
 
 static void test_cross_process_write(void **state) {
   (void)state;
   double data[1] = {10.0};
 
-  char *id =
+  const char *id =
       data_manager_create_buffer("inst", "cmd", INST_DATA_FLOAT64, 1, data);
 
   bool ok = run_child("write", id);
@@ -189,12 +188,11 @@ static void test_cross_process_write(void **state) {
   assert_float_equal(d[0], 15.0, TEST_EPSILON);
 
   data_manager_release_buffer(id);
-  free(id);
 }
 
 static void test_crash_cleanup(void **state) {
   (void)state;
-  char *id =
+  const char *id =
       data_manager_create_buffer("inst", "cmd", INST_DATA_UINT8, 10, NULL);
 
   run_child("crash", id);
@@ -208,7 +206,6 @@ static void test_crash_cleanup(void **state) {
   assert_true(meta.global_ref_count >= 1);
 
   data_manager_release_buffer(id);
-  free(id);
 }
 
 static void test_large_array_cross_process(void **state) {
@@ -222,7 +219,7 @@ static void test_large_array_cross_process(void **state) {
   for (size_t i = 0; i < N; i++)
     data[i] = (double)i;
 
-  char *id =
+  const char *id =
       data_manager_create_buffer("inst", "cmd", INST_DATA_FLOAT64, N, data);
 
   free(data);
@@ -238,14 +235,13 @@ static void test_large_array_cross_process(void **state) {
   }
 
   data_manager_release_buffer(id);
-  free(id);
 }
 
 static void test_cross_process_zero_copy(void **state) {
   (void)state;
   double *ptr = NULL;
 
-  char *id = data_manager_create_buffer_zero_copy(
+  const char *id = data_manager_create_buffer_zero_copy(
       "inst", "zero", INST_DATA_FLOAT64, 1, (void **)&ptr);
 
   ptr[0] = 123.0;
@@ -254,7 +250,6 @@ static void test_cross_process_zero_copy(void **state) {
   assert_true(ok);
 
   data_manager_release_buffer(id);
-  free(id);
 }
 
 typedef struct {
@@ -275,7 +270,7 @@ static void test_concurrent_writes(void **state) {
 
   double *ptr = NULL;
 
-  char *id = data_manager_create_buffer_zero_copy(
+  const char *id = data_manager_create_buffer_zero_copy(
       "inst", "stress", INST_DATA_FLOAT64, N, (void **)&ptr);
 
   assert_non_null(id);
@@ -312,7 +307,6 @@ static void test_concurrent_writes(void **state) {
   }
 
   data_manager_release_buffer(id);
-  free(id);
 }
 
 typedef struct {
@@ -335,7 +329,7 @@ static int race_worker(void *data) {
 static void test_race_open_release(void **state) {
   (void)state;
 
-  char *id =
+  const char *id =
       data_manager_create_buffer("inst", "race", INST_DATA_UINT8, 100, NULL);
 
   const int NUM_THREADS = 10;
@@ -353,14 +347,13 @@ static void test_race_open_release(void **state) {
   assert_true(true);
 
   data_manager_release_buffer(id);
-  free(id);
 }
 static void test_write_then_crash(void **state) {
   (void)state;
 
   double data[1] = {10.0};
 
-  char *id =
+  const char *id =
       data_manager_create_buffer("inst", "cmd", INST_DATA_FLOAT64, 1, data);
 
   /* child writes + crashes */
@@ -382,7 +375,6 @@ static void test_write_then_crash(void **state) {
   assert_true(meta.global_ref_count >= 1);
 
   data_manager_release_buffer(id);
-  free(id);
 }
 static void test_persistent_child_lifecycle(void **state) {
   (void)state;

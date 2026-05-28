@@ -6,7 +6,7 @@ static void test_create_and_metadata(void **state) {
   (void)state;
   float data[4] = {1, 2, 3, 4};
 
-  char *id =
+  const char *id =
       data_manager_create_buffer("inst", "cmd", INST_DATA_FLOAT32, 4, data);
 
   assert_non_null(id);
@@ -17,15 +17,13 @@ static void test_create_and_metadata(void **state) {
 
   assert_int_equal(meta.element_count, 4);
   assert_int_equal(meta.byte_size, sizeof(data));
-
-  free(id);
 }
 
 static void test_data_integrity(void **state) {
   (void)state;
   double data[3] = {10.0, 20.0, 30.0};
 
-  char *id =
+  const char *id =
       data_manager_create_buffer("inst", "cmd", INST_DATA_FLOAT64, 3, data);
 
   DataBuffer *buffer = data_manager_get_buffer(id);
@@ -37,7 +35,6 @@ static void test_data_integrity(void **state) {
   assert_float_equal(ptr[2], 30.0, TEST_EPSILON);
 
   data_manager_release_buffer(id);
-  free(id);
 }
 
 static void test_invalid_id(void **state) {
@@ -53,7 +50,7 @@ static void test_add_offset(void **state) {
   (void)state;
   double data[5] = {1, 2, 3, 4, 5};
 
-  char *id =
+  const char *id =
       data_manager_create_buffer("inst", "cmd", INST_DATA_FLOAT64, 5, data);
 
   assert_non_null(id);
@@ -69,14 +66,13 @@ static void test_add_offset(void **state) {
   }
 
   data_manager_release_buffer(id);
-  free(id);
 }
 
 static void test_multiply_gain(void **state) {
   (void)state;
   double data[4] = {2, 4, 6, 8};
 
-  char *id =
+  const char *id =
       data_manager_create_buffer("inst", "cmd", INST_DATA_FLOAT64, 4, data);
 
   bool ok = data_manager_multiply_gain(id, 0.5);
@@ -90,13 +86,12 @@ static void test_multiply_gain(void **state) {
   }
 
   data_manager_release_buffer(id);
-  free(id);
 }
 static void test_zero_copy_create(void **state) {
   (void)state;
   double *ptr = NULL;
 
-  char *id = data_manager_create_buffer_zero_copy(
+  const char *id = data_manager_create_buffer_zero_copy(
       "inst", "zero", INST_DATA_FLOAT64, 10, (void **)&ptr);
 
   assert_non_null(id);
@@ -114,7 +109,6 @@ static void test_zero_copy_create(void **state) {
   }
 
   data_manager_release_buffer(id);
-  free(id);
 }
 
 const struct CMUnitTest test_basic_tests[] = {

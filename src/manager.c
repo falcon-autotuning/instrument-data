@@ -17,7 +17,11 @@
 /* ============================================================
  * Helpers
  * ============================================================ */
-static char *inst_make_buffer_id(void) { return inst_make_name("buffer"); }
+static char *inst_make_buffer_id(void) {
+  char *id = inst_make_name("buffer");
+  fprintf(stderr, "MAKE_BUFFER_ID → %p (%s)\n", (void *)id, id);
+  return id;
+}
 
 /* ============================================================
  * Hash table (uthash)
@@ -39,12 +43,14 @@ static void init_impl(void) { mtx_init(&lock, mtx_plain); }
 static void init(void) { call_once(&init_once, init_impl); }
 
 static DataBuffer *lookup_buffer_no_lock(const char *id) {
+  fprintf(stderr, "LOOKUP: id=%s\n", id);
   MapEntry *e;
   HASH_FIND_STR(map, id, e);
   return e ? e->buf : NULL;
 }
 
 static void insert_buffer(const char *id, DataBuffer *buffer) {
+  fprintf(stderr, "INSERT: id=%s\n", id);
   MapEntry *e = malloc(sizeof(MapEntry));
   e->id = inst_strdup(id);
   e->buf = buffer;
@@ -89,32 +95,6 @@ static size_t inst_data_type_size(ArrayType type) {
     return 0;
   }
 }
-// For debugging locks
-#include <windows.h> // for GetCurrentThreadId()
-
-static _Thread_local int lock_depth = 0;
-static _Thread_local unsigned long owner_tid = 0;
-
-static void debug_lock(void) {
-  unsigned long tid = GetCurrentThreadId();
-
-  if (lock_depth > 0 && owner_tid == tid) {
-    printf("\n🔥 RECURSIVE LOCK DETECTED 🔥\n");
-    printf("Thread: %lu\n", tid);
-
-    // Force crash to get stack trace
-    abort();
-  }
-
-  mtx_lock(&lock);
-  lock_depth++;
-  owner_tid = tid;
-}
-
-static void debug_unlock(void) {
-  lock_depth--;
-  mtx_unlock(&lock);
-}
 
 static void remove_buffer(const char *id) {
   MapEntry *e;
@@ -126,13 +106,96 @@ static void remove_buffer(const char *id) {
   }
 }
 
+static DataBuffer *_get_buffer_internal(const char *id) {
+  if (!id || id[0] == '\0')
+    return NULL;
+
+  fprintf(stderr, "INTERNAL GET: id=%s\n", id);
+
+  DataBuffer *b = lookup_buffer_no_lock(id);
+  if (b)
+    return b;
+
+  InstShmHandle sd = inst_shm_handle_init();
+  InstShmHandle sm = inst_shm_handle_init();
+
+  /* ✅ Rebuild SHM handles directly from ID */
+
+  char *data_name = inst_build_shm_name(id, "data");
+  char *meta_name = inst_build_shm_name(id, "meta");
+
+  if (!data_name || !meta_name) {
+    free(data_name);
+    free(meta_name);
+    return NULL;
+  }
+
+  /* Prepare handles */
+  sd.name = data_name;
+  sm.name = meta_name;
+
+  /* size will be resolved during map */
+  void *ptr = inst_shm_map(&sd);
+  SharedMetadata *meta = inst_shm_map(&sm);
+
+  if (!ptr || !meta) {
+    fprintf(stderr, "🔥 SHM MAP FAILED: id=%s ptr=%p meta=%p\n", id, ptr, meta);
+
+    if (ptr)
+      inst_shm_unmap(&sd, ptr);
+    if (meta)
+      inst_shm_unmap(&sm, meta);
+
+    return NULL;
+  }
+
+  /* ✅ CRITICAL VALIDATION FIX */
+  if (meta->element_count == 0 || meta->byte_size == 0) {
+    fprintf(stderr, "🔥 INVALID META AFTER MAP: id=%s count=%zu bytes=%zu\n",
+            id, (size_t)meta->element_count, (size_t)meta->byte_size);
+
+    inst_shm_unmap(&sd, ptr);
+    inst_shm_unmap(&sm, meta);
+    return NULL;
+  }
+
+  /* ✅ Construct buffer only after validation */
+  DataBuffer *new_buf = calloc(1, sizeof(DataBuffer));
+  if (!new_buf) {
+    inst_shm_unmap(&sd, ptr);
+    inst_shm_unmap(&sm, meta);
+    return NULL;
+  }
+
+  new_buf->id = inst_strdup(id);
+  new_buf->data = ptr;
+  new_buf->meta = meta;
+  new_buf->shm_data = sd;
+  new_buf->shm_meta = sm;
+  new_buf->mutex = inst_ipc_mutex_create(id);
+  atomic_init(&new_buf->ref_count, 1);
+
+  if (!new_buf->mutex) {
+    fprintf(stderr, "🔥 MUTEX CREATE FAILED: id=%s\n", id);
+    inst_shm_unmap(&sd, ptr);
+    inst_shm_unmap(&sm, meta);
+    free(new_buf->id);
+    free(new_buf);
+    return NULL;
+  }
+
+  insert_buffer(id, new_buf);
+
+  return new_buf;
+}
+
 /* ============================================================
  * Core API
  * ============================================================ */
 
-char *data_manager_create_buffer(const char *instrument, const char *command_id,
-                                 ArrayType type, size_t count,
-                                 const void *data) {
+const char *data_manager_create_buffer(const char *instrument,
+                                       const char *command_id, ArrayType type,
+                                       size_t count, const void *data) {
   init();
 
   size_t sz = inst_data_type_size(type);
@@ -147,14 +210,18 @@ char *data_manager_create_buffer(const char *instrument, const char *command_id,
 
   InstShmHandle sd, sm;
 
-  void *ptr = inst_shm_create(&sd, bytes);
-  SharedMetadata *meta = inst_shm_create(&sm, sizeof(SharedMetadata));
+  void *ptr = inst_shm_create(&sd, bytes, id, "data");
+  SharedMetadata *meta =
+      inst_shm_create(&sm, sizeof(SharedMetadata), id, "meta");
 
   if (!ptr || !meta) {
+    fprintf(stderr, "🔥 SHM CREATE FAILED: ptr=%p meta=%p\n", ptr, meta);
+
     if (ptr)
       inst_shm_close(&sd, ptr);
     if (meta)
       inst_shm_close(&sm, meta);
+
     free(id);
     return NULL;
   }
@@ -164,6 +231,9 @@ char *data_manager_create_buffer(const char *instrument, const char *command_id,
   else
     memset(ptr, 0, bytes);
 
+  /* ✅ Ensure deterministic clean metadata */
+  memset(meta, 0, sizeof(SharedMetadata));
+
   inst_strlcpy(meta->buffer_id, id, INST_MAX_STRING_LEN);
   inst_strlcpy(meta->instrument_name, instrument, INST_MAX_STRING_LEN);
   inst_strlcpy(meta->command_id, command_id, INST_MAX_STRING_LEN);
@@ -171,10 +241,13 @@ char *data_manager_create_buffer(const char *instrument, const char *command_id,
   meta->type = type;
   meta->element_count = count;
   meta->byte_size = bytes;
-  meta->timestamp_ms = 0; /* you can plug in your time helper */
+  meta->timestamp_ms = 0;
 
   meta->global_ref_count = 1;
   meta->owners[0] = inst_get_pid();
+
+  /* ✅ CRITICAL: visibility across processes */
+  atomic_thread_fence(memory_order_seq_cst);
 
   DataBuffer *buffer = calloc(1, sizeof(DataBuffer));
 
@@ -188,22 +261,24 @@ char *data_manager_create_buffer(const char *instrument, const char *command_id,
 
   registry_add(buffer);
 
-  debug_lock();
-  insert_buffer(id, buffer);
-  debug_unlock();
+  mtx_lock(&lock);
+  insert_buffer(buffer->id, buffer);
+  mtx_unlock(&lock);
 
-  return id;
+  free(id);          // free temporary
+  return buffer->id; // ✅ canonical id
 }
-char *data_manager_create_buffer_zero_copy(const char *instrument,
-                                           const char *command_id,
-                                           ArrayType type, size_t element_count,
-                                           void **out_ptr) {
+const char *data_manager_create_buffer_zero_copy(const char *instrument,
+                                                 const char *command_id,
+                                                 ArrayType type,
+                                                 size_t element_count,
+                                                 void **out_ptr) {
   if (!out_ptr) {
     return NULL;
   }
 
-  char *id = data_manager_create_buffer(instrument, command_id, type,
-                                        element_count, NULL);
+  const char *id = data_manager_create_buffer(instrument, command_id, type,
+                                              element_count, NULL);
   if (!id) {
     *out_ptr = NULL;
     return NULL;
@@ -212,11 +287,11 @@ char *data_manager_create_buffer_zero_copy(const char *instrument,
   char safe_id[INST_MAX_STRING_LEN];
   inst_strlcpy(safe_id, id, sizeof(safe_id));
 
-  debug_lock();
-  DataBuffer *buffer = lookup_buffer_no_lock(safe_id);
+  mtx_lock(&lock);
+  DataBuffer *buffer = _get_buffer_internal(safe_id);
   if (buffer)
     data_buffer_ref(buffer);
-  debug_unlock();
+  mtx_unlock(&lock);
 
   if (!buffer) {
     *out_ptr = NULL;
@@ -233,69 +308,34 @@ char *data_manager_create_buffer_zero_copy(const char *instrument,
 DataBuffer *data_manager_get_buffer(const char *id) {
   init();
 
-  static _Thread_local int in_get_buffer = 0;
-
-  if (in_get_buffer > 0) {
-    printf("🔥 Recursive get_buffer detected for id=%s\n", id);
-    return NULL;
-  }
-
-  in_get_buffer++;
-
-  if (!id) {
-    in_get_buffer--;
+  if (!id || strncmp(id, "buffer_", 7) != 0) {
+    fprintf(stderr, "🔥 INVALID ID FORMAT: '%s'\n", id ? id : "NULL");
     return NULL;
   }
 
   char safe_id[INST_MAX_STRING_LEN];
   inst_strlcpy(safe_id, id, sizeof(safe_id));
 
-  debug_lock();
-  DataBuffer *b = lookup_buffer_no_lock(safe_id);
+  mtx_lock(&lock);
+  DataBuffer *b = _get_buffer_internal(safe_id);
+  mtx_unlock(&lock);
 
   if (!b) {
-    debug_unlock(); // release before expensive work
-
-    InstShmHandle sd = inst_shm_handle_init();
-    InstShmHandle sm = inst_shm_handle_init();
-
-    if (!registry_find(safe_id, &sd, &sm)) {
-      in_get_buffer--; // ✅ IMPORTANT
-      return NULL;
-    }
-
-    void *ptr = inst_shm_map(&sd);
-    SharedMetadata *meta = inst_shm_map(&sm);
-
-    DataBuffer *new_buf = calloc(1, sizeof(DataBuffer));
-    new_buf->id = inst_strdup(safe_id);
-    new_buf->data = ptr;
-    new_buf->meta = meta;
-    new_buf->shm_data = sd;
-    new_buf->shm_meta = sm;
-    new_buf->mutex = inst_ipc_mutex_create(safe_id);
-    atomic_init(&new_buf->ref_count, 1);
-
-    debug_lock(); // reacquire *fresh*
-
-    DataBuffer *existing = lookup_buffer_no_lock(safe_id);
-    if (existing) {
-      debug_unlock();
-
-      data_buffer_unref(new_buf);
-      b = existing;
-    } else {
-      insert_buffer(safe_id, new_buf);
-      b = new_buf;
-      debug_unlock();
-    }
-  } else {
-    debug_unlock();
+    fprintf(stderr, "GET BUFFER FAILED: id=%s\n", safe_id);
+    return NULL;
   }
 
   data_buffer_ref(b);
 
   inst_ipc_mutex_lock(b->mutex);
+
+  /* ✅ SAFETY: validate metadata before use */
+  if (!b->meta || b->meta->element_count == 0) {
+    fprintf(stderr, "🔥 INVALID BUFFER META: id=%s\n", safe_id);
+    inst_ipc_mutex_unlock(b->mutex);
+    data_buffer_unref(b);
+    return NULL;
+  }
 
   cleanup_dead_owners(b);
 
@@ -315,8 +355,6 @@ DataBuffer *data_manager_get_buffer(const char *id) {
 
   inst_ipc_mutex_unlock(b->mutex);
 
-  in_get_buffer--; // ✅ ADD THIS at end
-
   return b;
 }
 
@@ -328,14 +366,12 @@ void data_manager_release_buffer(const char *id) {
   char safe_id[INST_MAX_STRING_LEN];
   inst_strlcpy(safe_id, id, sizeof(safe_id));
 
-  debug_lock();
+  mtx_lock(&lock);
   buffer = lookup_buffer_no_lock(safe_id);
-  debug_unlock();
+  mtx_unlock(&lock);
 
   if (!buffer)
     return;
-
-  bool should_remove = false;
 
   inst_ipc_mutex_lock(buffer->mutex);
 
@@ -350,19 +386,7 @@ void data_manager_release_buffer(const char *id) {
 
   buffer->meta->global_ref_count = new_count;
 
-  should_remove = (new_count == 0);
-
   inst_ipc_mutex_unlock(buffer->mutex);
-
-  if (should_remove) {
-    debug_lock();
-    remove_buffer(id);
-    debug_unlock();
-
-    registry_remove(id);
-    inst_shm_unlink_name(buffer->shm_data.name);
-    inst_shm_unlink_name(buffer->shm_meta.name);
-  }
 
   data_buffer_unref(buffer);
 }
@@ -440,9 +464,9 @@ bool data_manager_get_metadata(const char *id, SharedMetadata *out_meta) {
     return false;
   }
 
-  debug_lock();
+  mtx_lock(&lock);
   DataBuffer *buffer = lookup_buffer_no_lock(id);
-  debug_unlock();
+  mtx_unlock(&lock);
 
   if (buffer) {
     inst_ipc_mutex_lock(buffer->mutex);

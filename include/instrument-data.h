@@ -120,13 +120,11 @@ INSTRUMENT_DATA_EXPORT ArrayType data_buffer_type(const DataBuffer *buffer);
  * - If @p data is not NULL, the data is copied into shared memory.
  * - If @p data is NULL, the buffer is allocated and zero-initialized.
  *
- * @note The caller owns the returned string and must free it.
  */
-INSTRUMENT_DATA_EXPORT char *data_manager_create_buffer(const char *instrument,
-                                                        const char *command_id,
-                                                        ArrayType type,
-                                                        size_t element_count,
-                                                        const void *data);
+INSTRUMENT_DATA_EXPORT const char *
+data_manager_create_buffer(const char *instrument, const char *command_id,
+                           ArrayType type, size_t element_count,
+                           const void *data);
 
 /**
  * @brief Create a buffer using zero-copy semantics.
@@ -147,7 +145,7 @@ INSTRUMENT_DATA_EXPORT char *data_manager_create_buffer(const char *instrument,
  *
  * @note The returned pointer is shared across processes.
  */
-INSTRUMENT_DATA_EXPORT char *
+INSTRUMENT_DATA_EXPORT const char *
 data_manager_create_buffer_zero_copy(const char *instrument,
                                      const char *command_id, ArrayType type,
                                      size_t element_count, void **out_ptr);

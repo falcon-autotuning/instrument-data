@@ -30,7 +30,9 @@ static inline InstShmHandle inst_shm_handle_init(void) {
 }
 
 /* Shared memory */
-void *inst_shm_create(InstShmHandle *out, size_t size);
+
+void *inst_shm_create(InstShmHandle *out, size_t size, const char *id,
+                      const char *kind);
 void *inst_shm_open_or_create(InstShmHandle *out, const char *name,
                               size_t size);
 void *inst_shm_map(InstShmHandle *h);
@@ -43,3 +45,5 @@ void *inst_ipc_mutex_create(const char *name);
 void inst_ipc_mutex_lock(void *handle);
 void inst_ipc_mutex_unlock(void *handle);
 void inst_ipc_mutex_destroy(void *handle);
+
+char *inst_build_shm_name(const char *id, const char *kind);

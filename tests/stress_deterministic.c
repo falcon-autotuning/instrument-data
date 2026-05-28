@@ -60,7 +60,7 @@ int main(void) {
   double *data = calloc(N, sizeof(double));
   assert_non_null(data);
 
-  char *id =
+  const char *id =
       data_manager_create_buffer("stress", "cmd", INST_DATA_FLOAT64, N, data);
 
   free(data);
@@ -100,7 +100,6 @@ int main(void) {
   printf("✅ Deterministic stress passed: %.2f\n", d[0]);
 
   data_manager_release_buffer(id);
-  free(id);
 
   return 0;
 }
