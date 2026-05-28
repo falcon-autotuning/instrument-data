@@ -1,9 +1,9 @@
-#include "buffer.h"
 #include "instrument-data.h"
-#include "process.h"
-#include "registry.h"
-#include "shm.h"
-#include "util.h"
+#include "internal/buffer.h"
+#include "internal/process.h"
+#include "internal/registry.h"
+#include "internal/shm.h"
+#include "internal/util.h"
 
 #include <threads.h>
 #include <uthash.h>
@@ -189,8 +189,16 @@ DataBuffer *data_manager_get_buffer(const char *id) {
   mtx_unlock(&lock);
 
   if (!b) {
-    InstShmHandle sd = {0};
-    InstShmHandle sm = {0};
+    InstShmHandle sd = {
+        .name = NULL,
+        .size = 0,
+#ifdef _WIN32
+        .handle = NULL,
+#else
+        .fd = -1,
+#endif
+    };
+    InstShmHandle sm = inst_shm_handle_init();
 
     if (!registry_find(id, &sd, &sm)) {
       return NULL;
@@ -360,8 +368,8 @@ bool data_manager_get_metadata(const char *id, SharedMetadata *out_meta) {
   }
 
   /* Fallback: use registry */
-  InstShmHandle sd = {0};
-  InstShmHandle sm = {0};
+  InstShmHandle sd = inst_shm_handle_init();
+  InstShmHandle sm = inst_shm_handle_init();
 
   if (!registry_find(id, &sd, &sm)) {
     return false;

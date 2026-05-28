@@ -1,6 +1,6 @@
-#include "shm.h"
+#include "internal/shm.h"
 
-#include "util.h"
+#include "internal/util.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -244,3 +244,31 @@ void inst_ipc_mutex_unlock(void *h) { sem_post((sem_t *)h); }
 void inst_ipc_mutex_destroy(void *h) { sem_close((sem_t *)h); }
 
 #endif
+void inst_shm_close(InstShmHandle *h, void *ptr) {
+  if (!h)
+    return;
+
+  /* Unmap memory */
+  if (ptr) {
+    inst_shm_unmap(h, ptr);
+  }
+
+  /* Close OS handle */
+#ifdef _WIN32
+  if (h->handle) {
+    CloseHandle(h->handle);
+    h->handle = NULL;
+  }
+#else
+  if (h->fd >= 0) {
+    close(h->fd);
+    h->fd = -1;
+  }
+#endif
+
+  /* Free duplicated name */
+  if (h->name) {
+    free(h->name);
+    h->name = NULL;
+  }
+}

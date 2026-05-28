@@ -1,4 +1,5 @@
 #include "instrument-data.h"
+#include "registry.h"
 
 #include <cmocka.h>
 
@@ -203,10 +204,12 @@ int main(int argc, char **argv) {
 
     for (size_t i = 0; i < sizeof(child_table) / sizeof(child_table[0]); i++) {
       if (str_eq(name, child_table[i].name)) {
-        return child_table[i].fn(argc, argv);
+        int rc = child_table[i].fn(argc, argv);
+        registry_shutdown();
+        return rc;
       }
     }
-
+    registry_shutdown();
     return 1;
   }
 
@@ -241,6 +244,8 @@ int main(int argc, char **argv) {
          test_multiprocess_tests_count * sizeof(struct CMUnitTest));
 
   int rc = _cmocka_run_group_tests("all_tests", all, total, NULL, NULL);
+
+  registry_shutdown();
 
   free(all);
   return rc;

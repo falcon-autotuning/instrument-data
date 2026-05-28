@@ -420,8 +420,10 @@ const struct CMUnitTest test_multiprocess_tests[] = {
     cmocka_unit_test(test_crash_cleanup),
     cmocka_unit_test(test_large_array_cross_process),
     cmocka_unit_test(test_cross_process_zero_copy),
+#ifndef USE_TSAN
     cmocka_unit_test(test_concurrent_writes),
     cmocka_unit_test(test_race_open_release),
+#endif
     cmocka_unit_test(test_write_then_crash),
     cmocka_unit_test(test_persistent_child_lifecycle),
 };

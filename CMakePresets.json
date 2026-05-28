@@ -27,7 +27,6 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_C_COMPILER": "clang",
-        "CMAKE_CXX_COMPILER": "clang++",
         "VCPKG_TARGET_TRIPLET": "x64-linux-dynamic",
         "CMAKE_PREFIX_PATH": "${sourceDir}/vcpkg_installed/x64-linux-dynamic/share;${sourceDir}/vcpkg_installed",
         "CMAKE_EXE_LINKER_FLAGS": "-fuse-ld=lld",
@@ -42,7 +41,6 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_C_COMPILER": "clang",
-        "CMAKE_CXX_COMPILER": "clang++",
         "VCPKG_TARGET_TRIPLET": "x64-linux-dynamic",
         "CMAKE_PREFIX_PATH": "${sourceDir}/vcpkg_installed/x64-linux-dynamic/share;${sourceDir}/vcpkg_installed",
         "CMAKE_EXE_LINKER_FLAGS": "-fuse-ld=lld",
@@ -56,7 +54,6 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_C_COMPILER": "clang",
-        "CMAKE_CXX_COMPILER": "clang++",
         "VCPKG_TARGET_TRIPLET": "x64-linux-dynamic",
         "CMAKE_PREFIX_PATH": "${sourceDir}/vcpkg_installed/x64-linux-dynamic/share;${sourceDir}/vcpkg_installed",
         "CMAKE_EXE_LINKER_FLAGS": "-fuse-ld=lld",
@@ -70,7 +67,6 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_C_COMPILER": "gcc",
-        "CMAKE_CXX_COMPILER": "g++",
         "VCPKG_TARGET_TRIPLET": "x64-linux-dynamic",
         "CMAKE_PREFIX_PATH": "${sourceDir}/vcpkg_installed/x64-linux-dynamic/share;${sourceDir}/vcpkg_installed"
       }
@@ -82,7 +78,6 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_C_COMPILER": "gcc",
-        "CMAKE_CXX_COMPILER": "g++",
         "VCPKG_TARGET_TRIPLET": "x64-linux-dynamic",
         "CMAKE_PREFIX_PATH": "${sourceDir}/vcpkg_installed/x64-linux-dynamic/share;${sourceDir}/vcpkg_installed"
       }
@@ -109,6 +104,36 @@
         "CMAKE_CXX_COMPILER": "clang-cl",
         "VCPKG_TARGET_TRIPLET": "x64-win-llvm",
         "CMAKE_PREFIX_PATH": "${sourceDir}/vcpkg_installed/x64-win-llvm/share;${sourceDir}/vcpkg_installed"
+      }
+    },
+    {
+      "name": "linux-clang-asan",
+      "description": "Linux Debug build with AddressSanitizer",
+      "inherits": "default",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_COMPILER": "clang",
+        "VCPKG_TARGET_TRIPLET": "x64-linux-dynamic",
+        "CMAKE_PREFIX_PATH": "${sourceDir}/vcpkg_installed/x64-linux-dynamic/share;${sourceDir}/vcpkg_installed",
+        "CMAKE_EXE_LINKER_FLAGS": "-fuse-ld=lld -fsanitize=address",
+        "CMAKE_SHARED_LINKER_FLAGS": "-fuse-ld=lld -fsanitize=address",
+        "CMAKE_C_FLAGS": "-fsanitize=address -fno-omit-frame-pointer -g",
+        "CMAKE_CXX_FLAGS": "-fsanitize=address -fno-omit-frame-pointer -g"
+      }
+    },
+    {
+      "name": "linux-clang-tsan",
+      "displayName": "Linux Clang TSan",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/linux-clang-tsan",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_C_COMPILER": "clang",
+        "VCPKG_TARGET_TRIPLET": "x64-linux-dynamic",
+        "CMAKE_PREFIX_PATH": "${sourceDir}/vcpkg_installed/x64-linux-dynamic/share;${sourceDir}/vcpkg_installed",
+        "CMAKE_C_FLAGS": "-fsanitize=thread -DUSE_TSAN -fno-omit-frame-pointer -g",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=thread",
+        "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=thread"
       }
     }
   ],
@@ -142,6 +167,16 @@
       "name": "windows-clang-cl-release",
       "configurePreset": "windows-clang-cl-release",
       "jobs": 0
+    },
+    {
+      "name": "linux-clang-asan",
+      "configurePreset": "linux-clang-asan",
+      "jobs": 0
+    },
+    {
+      "name": "linux-clang-tsan",
+      "configurePreset": "linux-clang-tsan",
+      "jobs": 0
     }
   ],
   "testPresets": [
@@ -168,6 +203,14 @@
     {
       "name": "windows-clang-cl-release",
       "configurePreset": "windows-clang-cl-release"
+    },
+    {
+      "name": "linux-clang-asan",
+      "configurePreset": "linux-clang-asan"
+    },
+    {
+      "name": "linux-clang-tsan",
+      "configurePreset": "linux-clang-tsan"
     }
   ]
 }

@@ -1,5 +1,5 @@
-#include "buffer.h"
-#include "shm.h"
+#include "internal/buffer.h"
+#include "internal/shm.h"
 #include <stdatomic.h>
 #include <stdlib.h>
 
@@ -16,12 +16,12 @@ void data_buffer_unref(DataBuffer *buffer) {
   if (atomic_fetch_sub(&buffer->ref_count, 1) == 1) {
 
     if (buffer->data) {
-      inst_shm_unmap(&buffer->shm_data, buffer->data);
+      inst_shm_close(&buffer->shm_data, buffer->data);
       buffer->data = NULL;
     }
 
     if (buffer->meta) {
-      inst_shm_unmap(&buffer->shm_meta, buffer->meta);
+      inst_shm_close(&buffer->shm_meta, buffer->meta);
       buffer->meta = NULL;
     }
 

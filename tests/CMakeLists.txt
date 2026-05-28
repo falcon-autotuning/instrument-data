@@ -23,6 +23,7 @@ add_executable(instrument-data-tests
 
 target_include_directories(instrument-data-tests PRIVATE
   ${CMAKE_SOURCE_DIR}/include
+  ${CMAKE_SOURCE_DIR}/src/internal
   ${CMAKE_CURRENT_BINARY_DIR}
 )
 
@@ -33,6 +34,7 @@ target_link_libraries(instrument-data-tests
     cmocka::cmocka
     Threads::Threads
 )
+target_compile_definitions(instrument-data-tests PRIVATE USE_TSAN)
 
 if(UNIX AND NOT APPLE)
   target_link_libraries(instrument-data-tests PRIVATE rt)

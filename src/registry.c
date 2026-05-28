@@ -1,7 +1,7 @@
-#include "registry.h"
-#include "buffer.h"
-#include "shm.h"
-#include "util.h"
+#include "internal/registry.h"
+#include "internal/buffer.h"
+#include "internal/shm.h"
+#include "internal/util.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -10,6 +10,13 @@
 #define REG_NAME "/inst_registry"
 #define MAX_BUF 1024
 #define MAGIC 0x494E5354
+static InstShmHandle registry_shm = {
+#ifdef _WIN32
+    .handle = NULL,
+#else
+    .fd = -1,
+#endif
+};
 
 typedef struct {
   uint32_t magic;
@@ -47,8 +54,8 @@ static int inst_strcmp0(const char *a, const char *b) {
 
 static void init_impl(void) {
 
-  InstShmHandle shm;
-  reg = inst_shm_open_or_create(&shm, REG_NAME, sizeof(Registry));
+  registry_shm = inst_shm_handle_init();
+  reg = inst_shm_open_or_create(&registry_shm, REG_NAME, sizeof(Registry));
   mutex = inst_ipc_mutex_create("inst_registry");
 
   inst_ipc_mutex_lock(mutex);
@@ -172,7 +179,7 @@ size_t registry_total_memory(void) {
     if (!reg->entries[i].active)
       continue;
 
-    InstShmHandle m = {0};
+    InstShmHandle m = inst_shm_handle_init();
     m.name = reg->entries[i].meta;
 
     SharedMetadata *meta =
@@ -180,10 +187,30 @@ size_t registry_total_memory(void) {
 
     if (meta) {
       total += meta->byte_size;
-      inst_shm_unmap(&m, meta);
+      inst_shm_close(&m, meta);
     }
   }
 
   inst_ipc_mutex_unlock(mutex);
   return total;
+}
+void registry_shutdown(void) {
+
+  if (!reg && registry_shm.name == NULL)
+    return;
+
+  if (mutex) {
+    inst_ipc_mutex_lock(mutex);
+  }
+
+  if (reg) {
+    inst_shm_close(&registry_shm, reg);
+    reg = NULL;
+  }
+
+  if (mutex) {
+    inst_ipc_mutex_unlock(mutex);
+    inst_ipc_mutex_destroy(mutex);
+    mutex = NULL;
+  }
 }

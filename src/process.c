@@ -1,5 +1,5 @@
 
-#include "process.h"
+#include "internal/process.h"
 
 #include <stdbool.h>
 #include <stdint.h>

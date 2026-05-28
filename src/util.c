@@ -1,4 +1,4 @@
-#include "util.h"
+#include "internal/util.h"
 
 #include <stdint.h>
 #include <stdio.h>
