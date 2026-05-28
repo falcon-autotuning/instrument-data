@@ -1,10 +1,33 @@
 #include "instrument-data.h"
-#include <glib.h>
+
+#include <cmocka.h>
+
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+/* ============================================================
+ * Helpers (GLib replacements)
+ * ============================================================ */
+
+static int str_eq(const char *a, const char *b) {
+  if (!a && !b)
+    return 1;
+  if (!a || !b)
+    return 0;
+  return strcmp(a, b) == 0;
+}
+
+static void str_chomp(char *s) {
+  if (!s)
+    return;
+  size_t len = strlen(s);
+  while (len > 0 && (s[len - 1] == '\n' || s[len - 1] == '\r')) {
+    s[--len] = '\0';
+  }
+}
 
 /* ============================================================
  * CHILD TEST IMPLEMENTATIONS
@@ -16,19 +39,13 @@ static int child_read(int argc, char **argv) {
   const char *id = argv[3];
 
   DataBuffer *buffer = data_manager_get_buffer(id);
-  if (!buffer) {
+  if (!buffer)
     return 2;
-  }
 
   double *d = data_buffer_data(buffer);
-  g_print("child read value = %f\n", d[0]);
+  printf("child read value = %f\n", d[0]);
 
-  /* default read expectation used by tests (42.0) */
-  if (d[0] == 42.0) {
-    return 0;
-  }
-
-  return 3;
+  return (d[0] == 42.0) ? 0 : 3;
 }
 
 static int child_server(int argc, char **argv) {
@@ -37,31 +54,26 @@ static int child_server(int argc, char **argv) {
 
   double data[1] = {99.0};
 
-  gchar *id = data_manager_create_buffer("inst", "persistent",
-                                         INST_DATA_FLOAT64, 1, data);
+  char *id = data_manager_create_buffer("inst", "persistent", INST_DATA_FLOAT64,
+                                        1, data);
 
-  if (!id) {
+  if (!id)
     return 2;
-  }
 
-  /* send ID to parent */
-  g_print("%s\n", id);
+  printf("%s\n", id);
   fflush(stdout);
 
-  /* ✅ command loop */
   char buf[32];
 
   while (fgets(buf, sizeof(buf), stdin)) {
-    g_strchomp(buf);
+    str_chomp(buf);
 
-    if (g_strcmp0(buf, "quit") == 0) {
+    if (str_eq(buf, "quit"))
       break;
-    }
   }
 
-  /* release before exit */
   data_manager_release_buffer(id);
-  g_free(id);
+  free(id);
 
   return 0;
 }
@@ -71,13 +83,12 @@ static int child_write(int argc, char **argv) {
 
   const char *id = argv[3];
   DataBuffer *buffer = data_manager_get_buffer(id);
-  if (!buffer) {
+  if (!buffer)
     return 2;
-  }
 
-  gboolean ok = data_manager_add_offset(id, 5.0);
+  bool ok = data_manager_add_offset(id, 5.0);
   data_manager_release_buffer(id);
-  return ok ? 0 : 1;
+  return !ok;
 }
 
 static int child_crash(int argc, char **argv) {
@@ -112,31 +123,24 @@ static int child_zero_copy(int argc, char **argv) {
   (void)argc;
 
   const char *id = argv[3];
-
   DataBuffer *buffer = data_manager_get_buffer(id);
-  if (!buffer) {
+  if (!buffer)
     return 2;
-  }
 
   double *d = data_buffer_data(buffer);
-
-  if (d[0] == 123.0) {
-    return 0;
-  }
-
-  return 3;
+  return (d[0] == 123.0) ? 0 : 3;
 }
 
 static int child_write_and_kill(int argc, char **argv) {
   (void)argc;
   const char *id = argv[3];
+
   DataBuffer *buffer = data_manager_get_buffer(id);
-  if (!buffer) {
+  if (!buffer)
     return 2;
-  }
+
   data_manager_add_offset(id, 5.0);
 
-  /* simulate crash immediately after write */
 #ifdef _WIN32
   ExitProcess(1);
 #else
@@ -163,14 +167,6 @@ static ChildEntry child_table[] = {
 };
 
 /* ============================================================
- * TEST REGISTRATION
- * ============================================================ */
-
-void test_basic_register(void);
-void test_registry_register(void);
-void test_multiprocess_register(void);
-
-/* ============================================================
  * CLEANUP
  * ============================================================ */
 
@@ -180,11 +176,15 @@ static void cleanup_ipc(void) {
   system("rm -f /dev/shm/inst_* 2>/dev/null");
 #endif
 }
-
-static void handle_sigint(int sig) {
+static void handle_signal(int sig) {
   (void)sig;
   cleanup_ipc();
-  _exit(1);
+
+#ifndef _WIN32
+  _exit(1); // safer than exit() in signal context
+#else
+  ExitProcess(1);
+#endif
 }
 
 /* ============================================================
@@ -194,30 +194,35 @@ static void handle_sigint(int sig) {
 int main(int argc, char **argv) {
 
 #ifndef _WIN32
-  signal(SIGINT, handle_sigint);
-  signal(SIGTERM, handle_sigint);
+  signal(SIGINT, handle_signal);
+  signal(SIGTERM, handle_signal);
 #endif
 
-  if (argc > 2 && g_strcmp0(argv[1], "--child") == 0) {
+  if (argc > 2 && str_eq(argv[1], "--child")) {
 
     const char *name = argv[2];
 
     for (size_t i = 0; i < sizeof(child_table) / sizeof(child_table[0]); i++) {
-      if (g_strcmp0(name, child_table[i].name) == 0) {
+      if (str_eq(name, child_table[i].name)) {
         return child_table[i].fn(argc, argv);
       }
     }
 
-    return 1; /* unknown child */
+    return 1;
   }
 
   cleanup_ipc();
 
-  g_test_init(&argc, &argv, NULL);
+  /* Register tests */
+  extern void test_basic(void **);
+  extern void test_registry(void **);
+  extern void test_multiprocess(void **);
 
-  test_basic_register();
-  test_registry_register();
-  test_multiprocess_register();
+  const struct CMUnitTest tests[] = {
+      cmocka_unit_test(test_basic),
+      cmocka_unit_test(test_registry),
+      cmocka_unit_test(test_multiprocess),
+  };
 
-  return g_test_run();
+  return cmocka_run_group_tests(tests, NULL, NULL);
 }
