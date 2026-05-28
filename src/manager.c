@@ -1,17 +1,65 @@
 #include "buffer.h"
 #include "instrument-data.h"
+#include "process.h"
 #include "registry.h"
 #include "shm.h"
+#include "util.h"
 
-#include "process.h"
-#include <glib.h>
+#include <threads.h>
+#include <uthash.h>
+
+#include <stdatomic.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
-static void cleanup_dead_owners(DataBuffer *b) {
-  guint32 new_count = 0;
+/* ============================================================
+ * Helpers
+ * ============================================================ */
+static char *inst_make_buffer_id(void) { return inst_make_name("buffer"); }
 
-  for (guint32 i = 0; i < b->meta->global_ref_count; i++) {
-    guint32 pid = b->meta->owners[i];
+/* ============================================================
+ * Hash table (uthash)
+ * ============================================================ */
+
+typedef struct {
+  char *id;
+  DataBuffer *buf;
+  UT_hash_handle hh;
+} MapEntry;
+
+static MapEntry *map = NULL;
+
+static mtx_t lock;
+static once_flag init_once = ONCE_FLAG_INIT;
+
+static void init_impl(void) { mtx_init(&lock, mtx_plain); }
+
+static void init(void) { call_once(&init_once, init_impl); }
+
+static DataBuffer *lookup_buffer_no_lock(const char *id) {
+  MapEntry *e;
+  HASH_FIND_STR(map, id, e);
+  return e ? e->buf : NULL;
+}
+
+static void insert_buffer(const char *id, DataBuffer *buffer) {
+  MapEntry *e = malloc(sizeof(MapEntry));
+  e->id = inst_strdup(id);
+  e->buf = buffer;
+  HASH_ADD_KEYPTR(hh, map, e->id, strlen(e->id), e);
+}
+
+/* ============================================================
+ * Utilities
+ * ============================================================ */
+
+static void cleanup_dead_owners(DataBuffer *b) {
+  uint32_t new_count = 0;
+
+  for (uint32_t i = 0; i < b->meta->global_ref_count; i++) {
+    uint32_t pid = b->meta->owners[i];
 
     if (inst_process_alive(pid)) {
       b->meta->owners[new_count++] = pid;
@@ -20,6 +68,7 @@ static void cleanup_dead_owners(DataBuffer *b) {
 
   b->meta->global_ref_count = new_count;
 }
+
 static size_t inst_data_type_size(ArrayType type) {
   switch (type) {
   case INST_DATA_FLOAT32:
@@ -40,107 +89,80 @@ static size_t inst_data_type_size(ArrayType type) {
     return 0;
   }
 }
-typedef struct {
-  DataBuffer *buf;
-} Entry;
 
-static GHashTable *map;
-static GMutex lock;
-static DataBuffer *lookup_buffer_no_lock(const gchar *id) {
-  return g_hash_table_lookup(map, id);
-}
+/* ============================================================
+ * Core API
+ * ============================================================ */
 
-static void init(void) {
-  static gsize once = 0;
-  if (g_once_init_enter(&once)) {
-    map = g_hash_table_new(g_str_hash, g_str_equal);
-    g_mutex_init(&lock);
-    g_once_init_leave(&once, 1);
-  }
-}
-
-static gchar *gen_id(void) {
-  return g_strdup_printf("buffer_%lu", g_get_real_time());
-}
-
-gchar *data_manager_create_buffer(const gchar *instrument,
-                                  const gchar *command_id, ArrayType type,
-                                  size_t count, const void *data) {
+char *data_manager_create_buffer(const char *instrument, const char *command_id,
+                                 ArrayType type, size_t count,
+                                 const void *data) {
   init();
 
   size_t sz = inst_data_type_size(type);
-  if (sz == 0) {
+  if (sz == 0)
     return NULL;
-  }
 
   size_t bytes = count * sz;
 
-  gchar *id = gen_id();
+  char *id = inst_make_buffer_id();
+  if (!id)
+    return NULL;
 
-  InstShmHandle sd;
-  InstShmHandle sm;
+  InstShmHandle sd, sm;
 
   void *ptr = inst_shm_create(&sd, bytes);
   SharedMetadata *meta = inst_shm_create(&sm, sizeof(SharedMetadata));
 
   if (!ptr || !meta) {
-    g_free(id);
+    free(id);
     return NULL;
   }
 
-  if (data != NULL) {
+  if (data)
     memcpy(ptr, data, bytes);
-  } else {
-    /* zero-copy: leave memory uninitialized or zero it */
+  else
     memset(ptr, 0, bytes);
-  }
 
-  g_strlcpy(meta->buffer_id, id, INST_MAX_STRING_LEN);
-  if (instrument) {
-    g_strlcpy(meta->instrument_name, instrument, INST_MAX_STRING_LEN);
-  }
-  if (command_id) {
-    g_strlcpy(meta->command_id, command_id, INST_MAX_STRING_LEN);
-  }
+  inst_strlcpy(meta->buffer_id, id, INST_MAX_STRING_LEN);
+  inst_strlcpy(meta->instrument_name, instrument, INST_MAX_STRING_LEN);
+  inst_strlcpy(meta->command_id, command_id, INST_MAX_STRING_LEN);
+
   meta->type = type;
   meta->element_count = count;
   meta->byte_size = bytes;
-  meta->timestamp_ms = g_get_real_time() / 1000;
+  meta->timestamp_ms = 0; /* you can plug in your time helper */
 
-  /* global lifetime */
-  meta->global_ref_count = 1;
   meta->global_ref_count = 1;
   meta->owners[0] = inst_get_pid();
 
-  DataBuffer *buffer = g_new0(DataBuffer, 1);
+  DataBuffer *buffer = calloc(1, sizeof(DataBuffer));
 
-  buffer->id = g_strdup(id);
+  buffer->id = inst_strdup(id);
   buffer->data = ptr;
   buffer->meta = meta;
   buffer->shm_data = sd;
   buffer->shm_meta = sm;
   buffer->mutex = inst_ipc_mutex_create(id);
-  buffer->ref_count = 1;
+  atomic_init(&buffer->ref_count, 1);
 
   registry_add(buffer);
 
-  g_mutex_lock(&lock);
-  g_hash_table_insert(map, g_strdup(id), buffer);
-  g_mutex_unlock(&lock);
+  mtx_lock(&lock);
+  insert_buffer(id, buffer);
+  mtx_unlock(&lock);
 
   return id;
 }
-
-gchar *data_manager_create_buffer_zero_copy(const gchar *instrument,
-                                            const gchar *command_id,
-                                            ArrayType type,
-                                            size_t element_count,
-                                            void **out_ptr) {
+char *data_manager_create_buffer_zero_copy(const char *instrument,
+                                           const char *command_id,
+                                           ArrayType type, size_t element_count,
+                                           void **out_ptr) {
   if (!out_ptr) {
     return NULL;
   }
-  gchar *id = data_manager_create_buffer(instrument, command_id, type,
-                                         element_count, NULL);
+  char *id = data_manager_create_buffer(instrument, command_id, type,
+                                        element_count, NULL);
   if (!id) {
     *out_ptr = NULL;
     return NULL;
@@ -157,12 +179,14 @@ gchar *data_manager_create_buffer_zero_copy(const gchar *instrument,
   return id;
 }
 
+/* ------------------------------------------------------------ */
+
 DataBuffer *data_manager_get_buffer(const char *id) {
   init();
 
-  g_mutex_lock(&lock);
+  mtx_lock(&lock);
   DataBuffer *b = lookup_buffer_no_lock(id);
-  g_mutex_unlock(&lock);
+  mtx_unlock(&lock);
 
   if (!b) {
     InstShmHandle sd = {0};
@@ -175,30 +199,30 @@ DataBuffer *data_manager_get_buffer(const char *id) {
     void *ptr = inst_shm_map(&sd);
     SharedMetadata *meta = inst_shm_map(&sm);
 
-    b = g_new0(DataBuffer, 1);
-    b->id = g_strdup(id);
+    b = calloc(1, sizeof(DataBuffer));
+    b->id = inst_strdup(id);
     b->data = ptr;
     b->meta = meta;
     b->shm_data = sd;
     b->shm_meta = sm;
     b->mutex = inst_ipc_mutex_create(id);
-    b->ref_count = 1;
+    atomic_init(&b->ref_count, 1);
 
-    g_hash_table_insert(map, g_strdup(id), b);
+    mtx_lock(&lock);
+    insert_buffer(id, b);
+    mtx_unlock(&lock);
   }
 
   inst_ipc_mutex_lock(b->mutex);
 
-  /* cleanup dead processes */
   cleanup_dead_owners(b);
 
-  /* add self if not already present */
-  guint32 pid = inst_get_pid();
-  gboolean found = FALSE;
+  uint32_t pid = inst_get_pid();
+  bool found = false;
 
-  for (guint32 i = 0; i < b->meta->global_ref_count; i++) {
+  for (uint32_t i = 0; i < b->meta->global_ref_count; i++) {
     if (b->meta->owners[i] == pid) {
-      found = TRUE;
+      found = true;
       break;
     }
   }
@@ -208,53 +232,29 @@ DataBuffer *data_manager_get_buffer(const char *id) {
   }
 
   inst_ipc_mutex_unlock(b->mutex);
+
   data_buffer_ref(b);
   return b;
 }
 
-void data_manager_release_buffer(const gchar *id) {
+/* ------------------------------------------------------------ */
+
+void data_manager_release_buffer(const char *id) {
   DataBuffer *buffer = NULL;
 
-  g_mutex_lock(&lock);
+  mtx_lock(&lock);
   buffer = lookup_buffer_no_lock(id);
-  g_mutex_unlock(&lock);
+  mtx_unlock(&lock);
 
-  if (!buffer) {
-    /* fallback attach WITHOUT owner addition */
-    InstShmHandle sd = {0}, sm = {0};
-
-    if (!registry_find(id, &sd, &sm)) {
-      return;
-    }
-
-    void *ptr = inst_shm_map(&sd);
-    SharedMetadata *meta = inst_shm_map(&sm);
-
-    buffer = g_new0(DataBuffer, 1);
-    buffer->id = g_strdup(id);
-    buffer->data = ptr;
-    buffer->meta = meta;
-    buffer->shm_data = sd;
-    buffer->shm_meta = sm;
-    buffer->mutex = inst_ipc_mutex_create(id);
-    buffer->ref_count = 1;
-
-    g_mutex_lock(&lock);
-    g_hash_table_insert(map, g_strdup(id), buffer);
-    g_mutex_unlock(&lock);
-  }
-  if (!buffer) {
+  if (!buffer)
     return;
-  }
 
   inst_ipc_mutex_lock(buffer->mutex);
 
-  guint32 pid = inst_get_pid();
+  uint32_t pid = inst_get_pid();
+  uint32_t new_count = 0;
 
-  /* remove this process */
-  guint32 new_count = 0;
-
-  for (guint32 i = 0; i < buffer->meta->global_ref_count; i++) {
+  for (uint32_t i = 0; i < buffer->meta->global_ref_count; i++) {
     if (buffer->meta->owners[i] != pid) {
       buffer->meta->owners[new_count++] = buffer->meta->owners[i];
     }
@@ -262,9 +262,7 @@ void data_manager_release_buffer(const gchar *id) {
 
   buffer->meta->global_ref_count = new_count;
 
-  gboolean last = (new_count == 0);
-
-  if (last) {
+  if (new_count == 0) {
     registry_remove(id);
     inst_shm_unlink_name(buffer->shm_data.name);
     inst_shm_unlink_name(buffer->shm_meta.name);
@@ -274,97 +272,70 @@ void data_manager_release_buffer(const gchar *id) {
 
   data_buffer_unref(buffer);
 }
+
+/* ------------------------------------------------------------ */
+
 bool data_manager_add_offset(const char *id, double offset) {
-  if (!id) {
-    return FALSE;
-  }
-
   DataBuffer *buffer = data_manager_get_buffer(id);
-  if (!buffer) {
-    return FALSE;
-  }
+  if (!buffer)
+    return false;
 
   inst_ipc_mutex_lock(buffer->mutex);
 
   size_t count = buffer->meta->element_count;
 
-  switch (buffer->meta->type) {
-
-  case INST_DATA_FLOAT32: {
-    float *data = (float *)buffer->data;
-    for (size_t i = 0; i < count; i++) {
-      data[i] += (float)offset;
-    }
-    break;
-  }
-
-  case INST_DATA_FLOAT64: {
-    double *data = (double *)buffer->data;
-    for (size_t i = 0; i < count; i++) {
-      data[i] += offset;
-    }
-    break;
-  }
-
-  default:
+  if (buffer->meta->type == INST_DATA_FLOAT32) {
+    float *d = buffer->data;
+    for (size_t i = 0; i < count; i++)
+      d[i] += (float)offset;
+  } else if (buffer->meta->type == INST_DATA_FLOAT64) {
+    double *d = buffer->data;
+    for (size_t i = 0; i < count; i++)
+      d[i] += offset;
+  } else {
     inst_ipc_mutex_unlock(buffer->mutex);
     data_buffer_unref(buffer);
-    return FALSE;
+    return false;
   }
 
   inst_ipc_mutex_unlock(buffer->mutex);
   data_buffer_unref(buffer);
-
-  return TRUE;
+  return true;
 }
+
+/* ------------------------------------------------------------ */
+
 bool data_manager_multiply_gain(const char *id, double gain) {
-  if (!id) {
-    return FALSE;
-  }
-
   DataBuffer *buffer = data_manager_get_buffer(id);
-  if (!buffer) {
-    return FALSE;
-  }
+  if (!buffer)
+    return false;
 
   inst_ipc_mutex_lock(buffer->mutex);
 
   size_t count = buffer->meta->element_count;
 
-  switch (buffer->meta->type) {
-
-  case INST_DATA_FLOAT32: {
-    float *data = (float *)buffer->data;
-    for (size_t i = 0; i < count; i++) {
-      data[i] *= (float)gain;
-    }
-    break;
-  }
-
-  case INST_DATA_FLOAT64: {
-    double *data = (double *)buffer->data;
-    for (size_t i = 0; i < count; i++) {
-      data[i] *= gain;
-    }
-    break;
-  }
-
-  default:
+  if (buffer->meta->type == INST_DATA_FLOAT32) {
+    float *d = buffer->data;
+    for (size_t i = 0; i < count; i++)
+      d[i] *= (float)gain;
+  } else if (buffer->meta->type == INST_DATA_FLOAT64) {
+    double *d = buffer->data;
+    for (size_t i = 0; i < count; i++)
+      d[i] *= gain;
+  } else {
     inst_ipc_mutex_unlock(buffer->mutex);
     data_buffer_unref(buffer);
-    return FALSE;
+    return false;
   }
 
   inst_ipc_mutex_unlock(buffer->mutex);
   data_buffer_unref(buffer);
+  return true;
+}
 
-  return TRUE;
-}
-gchar **data_manager_list_buffers(size_t *count) {
-  gchar **list = NULL;
-  registry_list(&list, count);
-  return list;
-}
+/* ------------------------------------------------------------ */
+
+char **data_manager_list_buffers(size_t *count) { return registry_list(count); }
 
 size_t data_manager_total_memory_usage(void) { return registry_total_memory(); }
 
@@ -372,12 +343,12 @@ bool data_manager_get_metadata(const char *id, SharedMetadata *out_meta) {
   init();
 
   if (!id || !out_meta) {
-    return FALSE;
+    return false;
   }
 
-  g_mutex_lock(&lock);
+  mtx_lock(&lock);
   DataBuffer *buffer = lookup_buffer_no_lock(id);
-  g_mutex_unlock(&lock);
+  mtx_unlock(&lock);
 
   if (buffer) {
     inst_ipc_mutex_lock(buffer->mutex);
@@ -385,29 +356,27 @@ bool data_manager_get_metadata(const char *id, SharedMetadata *out_meta) {
     memcpy(out_meta, buffer->meta, sizeof(SharedMetadata));
 
     inst_ipc_mutex_unlock(buffer->mutex);
-    return TRUE;
+    return true;
   }
 
-  /* 2. Fallback to global registry */
+  /* Fallback: use registry */
   InstShmHandle sd = {0};
   InstShmHandle sm = {0};
 
   if (!registry_find(id, &sd, &sm)) {
-    return FALSE;
+    return false;
   }
 
-  /* Map metadata SHM */
+  /* Map metadata shared memory */
   SharedMetadata *meta = inst_shm_map(&sm);
 
   if (!meta) {
-    return FALSE;
+    return false;
   }
 
-  /* Copy safely */
   memcpy(out_meta, meta, sizeof(SharedMetadata));
 
-  /* cleanup */
   inst_shm_unmap(&sm, meta);
 
-  return TRUE;
+  return true;
 }

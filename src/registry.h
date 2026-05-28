@@ -1,12 +1,12 @@
 #pragma once
 
-#include "buffer.h"
+#include "instrument-data.h"
 #include "shm.h"
+#include <stdbool.h>
 
 void registry_add(DataBuffer *buf);
-gboolean registry_find(const gchar *id, InstShmHandle *data,
-                       InstShmHandle *meta);
-void registry_remove(const gchar *id);
+bool registry_find(const char *id, InstShmHandle *data, InstShmHandle *meta);
+void registry_remove(const char *id);
 
-gboolean registry_list(gchar ***out, size_t *count);
+char **registry_list(size_t *count);
 size_t registry_total_memory(void);

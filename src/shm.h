@@ -1,6 +1,5 @@
 #pragma once
 
-#include <glib.h>
 #include <stddef.h>
 
 #ifdef _WIN32
@@ -8,7 +7,7 @@
 #endif
 
 typedef struct {
-  gchar *name;
+  char *name;
   size_t size;
 
 #ifdef _WIN32

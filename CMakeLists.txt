@@ -42,8 +42,7 @@ if(USE_CCACHE)
   endif()
 endif()
 
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(GLIB REQUIRED IMPORTED_TARGET glib-2.0)
+find_path(UTHASH_INCLUDE_DIRS "utarray.h")
 
 add_library(instrument-data SHARED
   src/buffer.c
@@ -51,10 +50,11 @@ add_library(instrument-data SHARED
   src/registry.c
   src/shm.c
   src/process.c
+  src/util.c
 )
 target_include_directories(instrument-data
   PRIVATE
-    ${GLIB_INCLUDE_DIRS}
+    ${UTHASH_INCLUDE_DIRS}
     ${CMAKE_CURRENT_SOURCE_DIR}/src
   PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -62,13 +62,6 @@ target_include_directories(instrument-data
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
-target_link_libraries(instrument-data
-  PRIVATE
-    PkgConfig::GLIB
-)
-if(UNIX AND NOT APPLE)
-  target_link_libraries(instrument-data PUBLIC rt pthread)
-endif()
 include(GenerateExportHeader)
 set(GENERATED_INCLUDE_DIR
     ${CMAKE_CURRENT_BINARY_DIR}/include/instrument-data)

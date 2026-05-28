@@ -1,22 +1,57 @@
 #include "shm.h"
-#include <glib.h>
+
+#include "util.h"
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #ifdef _WIN32
-
-/* ========================= WINDOWS IMPLEMENTATION ========================= */
-
+#include <bcrypt.h>
 #include <windows.h>
+#pragma comment(lib, "bcrypt.lib")
+#else
+#include <fcntl.h>
+#include <semaphore.h>
+#include <sys/mman.h>
+#include <unistd.h>
+#endif
+
+/* ---------- UUID v4 generator ---------- */
+
+static int inst_random_bytes(uint8_t *buf, size_t len) {
+#ifdef _WIN32
+  return BCryptGenRandom(NULL, buf, (ULONG)len,
+                         BCRYPT_USE_SYSTEM_PREFERRED_RNG) == 0;
+#else
+  int fd = open("/dev/urandom", O_RDONLY);
+  if (fd < 0)
+    return 0;
+
+  ssize_t r = read(fd, buf, len);
+  close(fd);
+
+  return r == (ssize_t)len;
+#endif
+}
+
+/* ============================================================
+ * WINDOWS IMPLEMENTATION
+ * ============================================================ */
+#ifdef _WIN32
 
 /* ---------------- SHARED MEMORY ---------------- */
 
 void *inst_shm_create(InstShmHandle *out, size_t size) {
-  gchar *name = g_strdup_printf("Global\\inst_%u", g_random_int());
+  char *name = inst_make_name("Global\\inst");
+  if (!name)
+    return NULL;
 
   HANDLE h = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0,
                                (DWORD)size, name);
 
   if (!h) {
-    g_free(name);
+    free(name);
     return NULL;
   }
 
@@ -24,7 +59,7 @@ void *inst_shm_create(InstShmHandle *out, size_t size) {
 
   if (!ptr) {
     CloseHandle(h);
-    g_free(name);
+    free(name);
     return NULL;
   }
 
@@ -37,22 +72,19 @@ void *inst_shm_create(InstShmHandle *out, size_t size) {
 
 void *inst_shm_open_or_create(InstShmHandle *out, const char *name,
                               size_t size) {
-
   HANDLE h = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0,
                                (DWORD)size, name);
 
-  if (!h) {
+  if (!h)
     return NULL;
-  }
 
   void *ptr = MapViewOfFile(h, FILE_MAP_ALL_ACCESS, 0, 0, size);
-
   if (!ptr) {
     CloseHandle(h);
     return NULL;
   }
 
-  out->name = g_strdup(name);
+  out->name = inst_strdup(name);
   out->size = size;
   out->handle = h;
 
@@ -60,99 +92,78 @@ void *inst_shm_open_or_create(InstShmHandle *out, const char *name,
 }
 
 void *inst_shm_map(InstShmHandle *h) {
-
-  HANDLE hMap = OpenFileMapping(FILE_MAP_ALL_ACCESS, FALSE, h->name);
-  if (!hMap) {
+  HANDLE hm = OpenFileMapping(FILE_MAP_ALL_ACCESS, FALSE, h->name);
+  if (!hm)
     return NULL;
-  }
 
-  void *ptr = MapViewOfFile(hMap, FILE_MAP_ALL_ACCESS, 0, 0, h->size);
-
+  void *ptr = MapViewOfFile(hm, FILE_MAP_ALL_ACCESS, 0, 0, h->size);
   if (!ptr) {
-    CloseHandle(hMap);
+    CloseHandle(hm);
     return NULL;
   }
 
-  /* ✅ keep handle so we can close it later */
-  h->handle = hMap;
-
+  h->handle = hm;
   return ptr;
 }
 
 void inst_shm_unmap(InstShmHandle *h, void *ptr) {
-  if (ptr) {
+  if (ptr)
     UnmapViewOfFile(ptr);
-  }
-
   if (h->handle) {
     CloseHandle(h->handle);
     h->handle = NULL;
   }
 }
 
-void inst_shm_unlink_name(const char *name) {
-  /* Windows does automatic cleanup when last handle closes */
-  (void)name;
-}
+void inst_shm_unlink_name(const char *name) { (void)name; /* auto-cleanup */ }
 
 /* ---------------- MUTEX ---------------- */
 
 void *inst_ipc_mutex_create(const char *name) {
-
-  gchar *full = g_strdup_printf("Global\\mtx_%s", name);
-
-  HANDLE h = CreateMutex(NULL, FALSE, full);
-
-  g_free(full);
-  return h;
+  char buffer[128];
+  snprintf(buffer, sizeof(buffer), "Global\\mtx_%s", name);
+  return CreateMutex(NULL, FALSE, buffer);
 }
 
 void inst_ipc_mutex_lock(void *h) {
-
   DWORD res = WaitForSingleObject((HANDLE)h, INFINITE);
-
-  if (res == WAIT_ABANDONED) {
-    /* previous owner crashed → safe to continue */
-  }
+  (void)res;
 }
 
 void inst_ipc_mutex_unlock(void *h) { ReleaseMutex((HANDLE)h); }
 
 void inst_ipc_mutex_destroy(void *h) { CloseHandle((HANDLE)h); }
 
-/* ========================= LINUX / POSIX IMPLEMENTATION
- * ========================= */
+#endif /* _WIN32 */
 
-#else
-
-#include <fcntl.h>
-#include <semaphore.h>
-#include <sys/mman.h>
-#include <unistd.h>
+/* ============================================================
+ * POSIX IMPLEMENTATION
+ * ============================================================ */
+#ifndef _WIN32
 
 /* ---------------- SHARED MEMORY ---------------- */
 
 void *inst_shm_create(InstShmHandle *out, size_t size) {
-
-  gchar *name = g_strdup_printf("/inst_%u", g_random_int());
+  char *name = inst_make_name("/inst");
+  if (!name)
+    return NULL;
 
   int fd = shm_open(name, O_CREAT | O_RDWR, 0666);
   if (fd == -1) {
-    g_free(name);
+    free(name);
     return NULL;
   }
 
   if (ftruncate(fd, size) == -1) {
     close(fd);
-    g_free(name);
+    free(name);
     return NULL;
   }
 
   void *ptr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-
   if (ptr == MAP_FAILED) {
     close(fd);
-    g_free(name);
+    free(name);
     return NULL;
   }
 
@@ -165,11 +176,9 @@ void *inst_shm_create(InstShmHandle *out, size_t size) {
 
 void *inst_shm_open_or_create(InstShmHandle *out, const char *name,
                               size_t size) {
-
   int fd = shm_open(name, O_CREAT | O_RDWR, 0666);
-  if (fd == -1) {
+  if (fd == -1)
     return NULL;
-  }
 
   if (ftruncate(fd, size) == -1) {
     close(fd);
@@ -177,13 +186,12 @@ void *inst_shm_open_or_create(InstShmHandle *out, const char *name,
   }
 
   void *ptr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-
   if (ptr == MAP_FAILED) {
     close(fd);
     return NULL;
   }
 
-  out->name = g_strdup(name);
+  out->name = inst_strdup(name);
   out->size = size;
   out->fd = fd;
 
@@ -191,29 +199,23 @@ void *inst_shm_open_or_create(InstShmHandle *out, const char *name,
 }
 
 void *inst_shm_map(InstShmHandle *h) {
-
   int fd = shm_open(h->name, O_RDWR, 0666);
-  if (fd == -1) {
+  if (fd == -1)
     return NULL;
-  }
 
   void *ptr = mmap(NULL, h->size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-
   if (ptr == MAP_FAILED) {
     close(fd);
     return NULL;
   }
 
   h->fd = fd;
-
   return ptr;
 }
 
 void inst_shm_unmap(InstShmHandle *h, void *ptr) {
-  if (ptr) {
+  if (ptr)
     munmap(ptr, h->size);
-  }
-
   if (h->fd >= 0) {
     close(h->fd);
     h->fd = -1;
@@ -225,22 +227,13 @@ void inst_shm_unlink_name(const char *name) { shm_unlink(name); }
 /* ---------------- MUTEX ---------------- */
 
 void *inst_ipc_mutex_create(const char *name) {
+  char buffer[128];
+  snprintf(buffer, sizeof(buffer), "/mtx_%s", name);
 
-  gchar *n = g_strdup_printf("/mtx_%s", name);
-
-  sem_t *sem = sem_open(n, O_CREAT, 0666, 1);
-
-  if (sem == SEM_FAILED) {
-    g_free(n);
+  sem_t *sem = sem_open(buffer, O_CREAT, 0666, 1);
+  if (sem == SEM_FAILED)
     return NULL;
-  }
 
-  int val = 0;
-  if (sem_getvalue(sem, &val) == 0 && val == 0) {
-    sem_post(sem);
-  }
-
-  g_free(n);
   return sem;
 }
 

@@ -1,9 +1,10 @@
 #include "buffer.h"
 #include "shm.h"
-#include <glib.h>
+#include <stdatomic.h>
+#include <stdlib.h>
 
 DataBuffer *data_buffer_ref(DataBuffer *buffer) {
-  g_atomic_int_inc(&buffer->ref_count);
+  atomic_fetch_add(&buffer->ref_count, 1);
   return buffer;
 }
 
@@ -12,7 +13,7 @@ void data_buffer_unref(DataBuffer *buffer) {
     return;
   }
 
-  if (g_atomic_int_dec_and_test(&buffer->ref_count)) {
+  if (atomic_fetch_sub(&buffer->ref_count, 1) == 1) {
 
     if (buffer->data) {
       inst_shm_unmap(&buffer->shm_data, buffer->data);
@@ -29,8 +30,8 @@ void data_buffer_unref(DataBuffer *buffer) {
       buffer->mutex = NULL;
     }
 
-    g_free(buffer->id);
-    g_free(buffer);
+    free(buffer->id);
+    free(buffer);
   }
 }
 

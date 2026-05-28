@@ -1,15 +1,19 @@
+
 #include "process.h"
+
+#include <stdbool.h>
+#include <stdint.h>
 
 #ifdef _WIN32
 
 #include <windows.h>
 
-guint32 inst_get_pid(void) { return GetCurrentProcessId(); }
+uint32_t inst_get_pid(void) { return (uint32_t)GetCurrentProcessId(); }
 
-gboolean inst_process_alive(guint32 pid) {
+bool inst_process_alive(uint32_t pid) {
   HANDLE h = OpenProcess(SYNCHRONIZE, FALSE, pid);
   if (!h)
-    return FALSE;
+    return false;
 
   DWORD ret = WaitForSingleObject(h, 0);
   CloseHandle(h);
@@ -19,11 +23,17 @@ gboolean inst_process_alive(guint32 pid) {
 
 #else
 
+#include <errno.h>
 #include <signal.h>
 #include <unistd.h>
 
-guint32 inst_get_pid(void) { return (guint32)getpid(); }
+uint32_t inst_get_pid(void) { return (uint32_t)getpid(); }
 
-gboolean inst_process_alive(guint32 pid) { return kill(pid, 0) == 0; }
+bool inst_process_alive(uint32_t pid) {
+  if (kill((pid_t)pid, 0) == 0)
+    return true;
+
+  return errno != ESRCH;
+}
 
 #endif

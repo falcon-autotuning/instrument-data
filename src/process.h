@@ -1,6 +1,7 @@
 #pragma once
 
-#include <glib.h>
+#include <stdbool.h>
+#include <stdint.h>
 
-gboolean inst_process_alive(guint32 pid);
-guint32 inst_get_pid(void);
+bool inst_process_alive(uint32_t pid);
+uint32_t inst_get_pid(void);
