@@ -116,11 +116,7 @@ static DataBuffer *_get_buffer_internal(const char *id) {
   if (b)
     return b;
 
-  InstShmHandle sd = inst_shm_handle_init();
-  InstShmHandle sm = inst_shm_handle_init();
-
-  /* ✅ Rebuild SHM handles directly from ID */
-
+  /* Build names */
   char *data_name = inst_build_shm_name(id, "data");
   char *meta_name = inst_build_shm_name(id, "meta");
 
@@ -131,21 +127,42 @@ static DataBuffer *_get_buffer_internal(const char *id) {
   }
 
   /* Prepare handles */
+  InstShmHandle sd = inst_shm_handle_init();
+  InstShmHandle sm = inst_shm_handle_init();
+
   sd.name = data_name;
   sm.name = meta_name;
 
-  /* size will be resolved during map */
-  void *ptr = inst_shm_map(&sd);
+  /* ✅ STEP 1: map metadata FIRST (fixed size) */
+  sm.size = sizeof(SharedMetadata);
+
   SharedMetadata *meta = inst_shm_map(&sm);
+  if (!meta) {
+    fprintf(stderr, "🔥 META MAP FAILED: id=%s\n", id);
+    free(data_name);
+    free(meta_name);
+    return NULL;
+  }
 
-  if (!ptr || !meta) {
-    fprintf(stderr, "🔥 SHM MAP FAILED: id=%s ptr=%p meta=%p\n", id, ptr, meta);
+  /* ✅ Validate metadata */
+  if (meta->byte_size == 0 || meta->element_count == 0) {
+    fprintf(stderr, "🔥 INVALID META CONTENT: id=%s\n", id);
+    inst_shm_unmap(&sm, meta);
+    free(data_name);
+    free(meta_name);
+    return NULL;
+  }
 
-    if (ptr)
-      inst_shm_unmap(&sd, ptr);
-    if (meta)
-      inst_shm_unmap(&sm, meta);
+  /* ✅ STEP 2: now map data using real size */
+  sd.size = meta->byte_size;
 
+  void *ptr = inst_shm_map(&sd);
+  if (!ptr) {
+    fprintf(stderr, "🔥 DATA MAP FAILED: id=%s size=%zu\n", id,
+            (size_t)sd.size);
+    inst_shm_unmap(&sm, meta);
+    free(data_name);
+    free(meta_name);
     return NULL;
   }
 
