@@ -63,7 +63,7 @@ target_include_directories(instrument-data
 )
 
 target_link_libraries(instrument-data
-  PUBLIC
+  PRIVATE
     PkgConfig::GLIB
 )
 if(UNIX AND NOT APPLE)
