@@ -202,23 +202,6 @@ INSTRUMENT_DATA_EXPORT bool data_manager_multiply_gain(const char *id,
                                                        double gain);
 
 /**
- * @brief List all active buffer IDs.
- *
- * @param[out] count Number of buffers returned.
- * @return Array of buffer IDs (NULL-terminated).
- *
- * @note The caller must free the returned array and each string.
- */
-INSTRUMENT_DATA_EXPORT char **data_manager_list_buffers(size_t *count);
-
-/**
- * @brief Get total memory usage across all buffers.
- *
- * @return Total number of bytes used by all buffers.
- */
-INSTRUMENT_DATA_EXPORT size_t data_manager_total_memory_usage(void);
-
-/**
  * @brief Retrieve metadata for a buffer.
  *
  * @param id Buffer identifier.
