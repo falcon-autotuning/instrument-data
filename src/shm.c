@@ -11,13 +11,13 @@
 #else
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #endif
 
 /* ============================================================
  * PLATFORM PREFIX
  * ============================================================ */
-
 #ifdef _WIN32
 #define INST_SHM_PREFIX "Local\\"
 #else
@@ -205,6 +205,9 @@ void *inst_shm_create(InstShmHandle *out, size_t size, const char *id,
   if (!name)
     return NULL;
 
+  /* cleanup stale */
+  shm_unlink(name); // safe best-effort
+
   int fd = shm_open(name, O_CREAT | O_RDWR, 0666);
 
   if (fd == -1) {
@@ -246,17 +249,21 @@ void *inst_shm_open_or_create(InstShmHandle *out, const char *name,
   if (size == 0)
     size = 1;
 
-  int fd = shm_open(name, O_CREAT | O_RDWR, 0666);
+  int fd = shm_open(name, O_RDWR | O_CREAT, 0666);
 
   if (fd == -1) {
     perror("shm_open(open_or_create)");
     return NULL;
   }
 
-  if (ftruncate(fd, size) == -1) {
-    perror("ftruncate(open_or_create)");
-    close(fd);
-    return NULL;
+  /* ✅ Only resize if new */
+  struct stat st;
+  if (fstat(fd, &st) == 0 && st.st_size == 0) {
+    if (ftruncate(fd, size) == -1) {
+      perror("ftruncate(open_or_create)");
+      close(fd);
+      return NULL;
+    }
   }
 
   void *ptr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
@@ -311,7 +318,7 @@ void *inst_ipc_mutex_create(const char *name) {
     return NULL;
 
   char buffer[256];
-  snprintf(buffer, sizeof(buffer), "/mtx_%s", name);
+  snprintf(buffer, sizeof(buffer), INST_SHM_PREFIX "mtx_%s", name);
 
   sem_t *sem = sem_open(buffer, O_CREAT, 0666, 1);
   if (sem == SEM_FAILED) {
@@ -351,12 +358,7 @@ void inst_shm_close(InstShmHandle *h, void *ptr) {
 
   inst_shm_unmap(h, ptr);
 
-#ifdef _WIN32
-  if (h->handle) {
-    CloseHandle(h->handle);
-    h->handle = NULL;
-  }
-#else
+#ifndef _WIN32
   if (h->fd >= 0) {
     close(h->fd);
     h->fd = -1;
