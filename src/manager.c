@@ -1,7 +1,6 @@
 #include "instrument-data.h"
 #include "internal/buffer.h"
 #include "internal/process.h"
-#include "internal/registry.h"
 #include "internal/shm.h"
 #include "internal/util.h"
 
@@ -276,8 +275,6 @@ const char *data_manager_create_buffer(const char *instrument,
   buffer->mutex = inst_ipc_mutex_create(id);
   atomic_init(&buffer->ref_count, 1);
 
-  registry_add(buffer);
-
   mtx_lock(&lock);
   insert_buffer(buffer->id, buffer);
   mtx_unlock(&lock);
@@ -470,10 +467,6 @@ bool data_manager_multiply_gain(const char *id, double gain) {
 
 /* ------------------------------------------------------------ */
 
-char **data_manager_list_buffers(size_t *count) { return registry_list(count); }
-
-size_t data_manager_total_memory_usage(void) { return registry_total_memory(); }
-
 bool data_manager_get_metadata(const char *id, SharedMetadata *out_meta) {
   init();
 
@@ -494,24 +487,25 @@ bool data_manager_get_metadata(const char *id, SharedMetadata *out_meta) {
     return true;
   }
 
-  /* Fallback: use registry */
-  InstShmHandle sd = inst_shm_handle_init();
-  InstShmHandle sm = inst_shm_handle_init();
-
-  if (!registry_find(id, &sd, &sm)) {
+  char *meta_name = inst_build_shm_name(id, "meta");
+  if (!meta_name)
     return false;
-  }
 
-  /* Map metadata shared memory */
+  InstShmHandle sm = inst_shm_handle_init();
+  sm.name = meta_name;
+  sm.size = sizeof(SharedMetadata);
+
   SharedMetadata *meta = inst_shm_map(&sm);
 
   if (!meta) {
+    free(meta_name);
     return false;
   }
 
   memcpy(out_meta, meta, sizeof(SharedMetadata));
 
   inst_shm_unmap(&sm, meta);
+  free(meta_name);
 
   return true;
 }

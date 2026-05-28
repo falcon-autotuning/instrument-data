@@ -1,5 +1,4 @@
 #include "instrument-data.h"
-#include "registry.h"
 
 #include <cmocka.h>
 
@@ -208,11 +207,9 @@ int main(int argc, char **argv) {
     for (size_t i = 0; i < sizeof(child_table) / sizeof(child_table[0]); i++) {
       if (str_eq(name, child_table[i].name)) {
         int rc = child_table[i].fn(argc, argv);
-        registry_shutdown();
         return rc;
       }
     }
-    registry_shutdown();
     return 1;
   }
 
@@ -222,14 +219,10 @@ int main(int argc, char **argv) {
   extern const struct CMUnitTest test_basic_tests[];
   extern const size_t test_basic_tests_count;
 
-  extern const struct CMUnitTest test_registry_tests[];
-  extern const size_t test_registry_tests_count;
-
   extern const struct CMUnitTest test_multiprocess_tests[];
   extern const size_t test_multiprocess_tests_count;
 
-  size_t total = test_basic_tests_count + test_registry_tests_count +
-                 test_multiprocess_tests_count;
+  size_t total = test_basic_tests_count + test_multiprocess_tests_count;
 
   struct CMUnitTest *all = malloc(sizeof(struct CMUnitTest) * total);
 
@@ -239,16 +232,10 @@ int main(int argc, char **argv) {
          test_basic_tests_count * sizeof(struct CMUnitTest));
   idx += test_basic_tests_count;
 
-  memcpy(&all[idx], test_registry_tests,
-         test_registry_tests_count * sizeof(struct CMUnitTest));
-  idx += test_registry_tests_count;
-
   memcpy(&all[idx], test_multiprocess_tests,
          test_multiprocess_tests_count * sizeof(struct CMUnitTest));
 
   int rc = _cmocka_run_group_tests("all_tests", all, total, NULL, NULL);
-
-  registry_shutdown();
 
   free(all);
   return rc;

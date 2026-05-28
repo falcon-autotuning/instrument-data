@@ -24,10 +24,6 @@
 #define INST_SHM_PREFIX "/"
 #endif
 
-/* ============================================================
- * NAME BUILDER (CRITICAL FIX)
- * ============================================================ */
-
 char *inst_build_shm_name(const char *id, const char *kind) {
   if (!id || !kind)
     return NULL;
@@ -193,13 +189,11 @@ void inst_ipc_mutex_destroy(void *h) {
   CloseHandle((HANDLE)h);
 }
 
-#endif /* _WIN32 */
+#else
 
 /* ============================================================
  * POSIX IMPLEMENTATION
  * ============================================================ */
-
-#ifndef _WIN32
 
 void *inst_shm_create(InstShmHandle *out, size_t size, const char *id,
                       const char *kind) {

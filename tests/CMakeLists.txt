@@ -17,7 +17,6 @@ file(GENERATE
 add_executable(instrument-data-tests
   test_main.c
   test_basic.c
-  test_registry.c
   test_multiprocess.c
 )
 
@@ -28,7 +27,7 @@ target_include_directories(instrument-data-tests PRIVATE
 )
 
 
-target_link_libraries(instrument-data-tests 
+target_link_libraries(instrument-data-tests
   PRIVATE
     instrument-data
     cmocka::cmocka
@@ -61,7 +60,7 @@ add_executable(instrument-data-stress-deterministic
 add_executable(instrument-data-stress-chaos
     stress_chaos.c)
 
-target_link_libraries(instrument-data-stress-deterministic 
+target_link_libraries(instrument-data-stress-deterministic
   PRIVATE
     instrument-data
     cmocka::cmocka

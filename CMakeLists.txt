@@ -48,13 +48,12 @@ find_package(Threads REQUIRED)
 add_library(instrument-data SHARED
   src/buffer.c
   src/manager.c
-  src/registry.c
   src/shm.c
   src/process.c
   src/util.c
 )
 
-target_link_libraries(instrument-data 
+target_link_libraries(instrument-data
   PRIVATE
     Threads::Threads
 )
