@@ -62,16 +62,6 @@ This metadata enables safe sharing and lifecycle control across processes.
 
 ---
 
-### Registry
-
-The registry acts as a global lookup table that allows processes to:
-
-- Discover existing buffers
-- Attach to buffers via ID
-- Retrieve shared memory handles
-
----
-
 ### Zero-Copy Design
 
 By default, the library supports zero-copy buffer creation:
@@ -138,7 +128,6 @@ data_manager_multiply_gain(id, 2.0);
 
 ```C
 data_manager_release_buffer(id);
-g_free(id);
 ```
 
 Buffers are automatically cleaned up when no processes are using them.
@@ -188,25 +177,9 @@ make test
 ### Test Categories
 
 Basic: API correctness  
-Registry: buffer discovery & metadata  
 Multiprocess: IPC validation  
 Deterministic stress: concurrent correctness  
 Chaos stress: randomized concurrency + failure injection  
-
----
-
-### Notes for Developers
-
-- Tests rely on spawning the test binary as a subprocess
-- The binary path is injected via test_config.h
-- Shared memory and semaphore artifacts are cleaned before test runs
-
-If tests hang or fail unexpectedly, you can manually clear IPC artifacts:
-
-```bash
-rm -f /dev/shm/sem.mtx_*
-rm -f /dev/shm/inst_*
-```
 
 ---
 
@@ -226,38 +199,8 @@ Concurrency is validated using:
 
 ---
 
-## Design Goals
-
-- High performance (zero-copy)
-- Cross-process safety
-- Minimal dependencies
-- Predictable lifecycle behavior
-- Robustness under failure
-
----
-
-## Known Limitations
-
-- No built-in garbage collection daemon (cleanup is lazy/on access)
-- Requires careful synchronization for user-defined writes
-
----
-
 ## License
 
 This project is licensed under the Mozilla Public License 2.0 (MPL-2.0).
 
 See the LICENSE file for details.
-
----
-
-## Summary
-
-The Instrument Data Library provides a fast, safe, and well-tested foundation for sharing structured numerical data across processes in C99 environments.
-
-It is suitable for:
-
-- Scientific computing
-- Embedded instrumentation systems
-- Real-time data pipelines
-- High-performance computing contexts

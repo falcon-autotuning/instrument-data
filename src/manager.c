@@ -139,7 +139,7 @@ static DataBuffer *_get_buffer_internal(const char *id) {
 
   SharedMetadata *meta = inst_shm_map(&sm);
   if (!meta) {
-    fprintf(stderr, "🔥 META MAP FAILED: id=%s\n", id);
+    fprintf(stderr, "ERROR: META MAP FAILED: id=%s\n", id);
     free(data_name);
     free(meta_name);
     return NULL;
@@ -147,7 +147,7 @@ static DataBuffer *_get_buffer_internal(const char *id) {
 
   /* ✅ Validate metadata */
   if (meta->byte_size == 0 || meta->element_count == 0) {
-    fprintf(stderr, "🔥 INVALID META CONTENT: id=%s\n", id);
+    fprintf(stderr, "ERROR: INVALID META CONTENT: id=%s\n", id);
     inst_shm_unmap(&sm, meta);
     free(data_name);
     free(meta_name);
@@ -159,7 +159,7 @@ static DataBuffer *_get_buffer_internal(const char *id) {
 
   void *ptr = inst_shm_map(&sd);
   if (!ptr) {
-    fprintf(stderr, "🔥 DATA MAP FAILED: id=%s size=%zu\n", id,
+    fprintf(stderr, "ERROR: DATA MAP FAILED: id=%s size=%zu\n", id,
             (size_t)sd.size);
     inst_shm_unmap(&sm, meta);
     free(data_name);
@@ -169,7 +169,7 @@ static DataBuffer *_get_buffer_internal(const char *id) {
 
   /* ✅ CRITICAL VALIDATION FIX */
   if (meta->element_count == 0 || meta->byte_size == 0) {
-    fprintf(stderr, "🔥 INVALID META AFTER MAP: id=%s count=%zu bytes=%zu\n",
+    fprintf(stderr, "ERROR: INVALID META AFTER MAP: id=%s count=%zu bytes=%zu\n",
             id, (size_t)meta->element_count, (size_t)meta->byte_size);
 
     inst_shm_unmap(&sd, ptr);
@@ -194,7 +194,7 @@ static DataBuffer *_get_buffer_internal(const char *id) {
   atomic_init(&new_buf->ref_count, 1);
 
   if (!new_buf->mutex) {
-    fprintf(stderr, "🔥 MUTEX CREATE FAILED: id=%s\n", id);
+    fprintf(stderr, "ERROR: MUTEX CREATE FAILED: id=%s\n", id);
     inst_shm_unmap(&sd, ptr);
     inst_shm_unmap(&sm, meta);
     free(new_buf->id);
@@ -233,7 +233,7 @@ const char *data_manager_create_buffer(const char *instrument,
       inst_shm_create(&sm, sizeof(SharedMetadata), id, "meta");
 
   if (!ptr || !meta) {
-    fprintf(stderr, "🔥 SHM CREATE FAILED: ptr=%p meta=%p\n", ptr, meta);
+    fprintf(stderr, "ERROR: SHM CREATE FAILED: ptr=%p meta=%p\n", ptr, meta);
 
     if (ptr)
       inst_shm_close(&sd, ptr);
@@ -325,7 +325,7 @@ DataBuffer *data_manager_get_buffer(const char *id) {
   init();
 
   if (!id || strncmp(id, "buffer_", 7) != 0) {
-    fprintf(stderr, "🔥 INVALID ID FORMAT: '%s'\n", id ? id : "NULL");
+    fprintf(stderr, "ERROR: INVALID ID FORMAT: '%s'\n", id ? id : "NULL");
     return NULL;
   }
 
@@ -345,7 +345,7 @@ DataBuffer *data_manager_get_buffer(const char *id) {
 
   /* ✅ SAFETY: validate metadata before use */
   if (!b->meta || b->meta->element_count == 0) {
-    fprintf(stderr, "🔥 INVALID BUFFER META: id=%s\n", safe_id);
+    fprintf(stderr, "ERROR: INVALID BUFFER META: id=%s\n", safe_id);
     inst_ipc_mutex_unlock(b->mutex);
     data_buffer_unref(b);
     return NULL;

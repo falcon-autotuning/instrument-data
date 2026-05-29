@@ -82,6 +82,9 @@ target_include_directories(instrument-data-stress-chaos PRIVATE
 )
 add_test(NAME stress_deterministic
          COMMAND instrument-data-stress-deterministic)
+set_tests_properties(stress_deterministic PROPERTIES
+  USES_TERMINAL TRUE
+)
 
 foreach(i RANGE 1 15)
   add_test(NAME stress_chaos_${i}

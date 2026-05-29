@@ -39,7 +39,7 @@ void data_buffer_unref(DataBuffer *buffer) {
 
 void *data_buffer_data(DataBuffer *b) {
   if (!b || !b->data) {
-    fprintf(stderr, "🔥 data_buffer_data NULL access\n");
+    fprintf(stderr, "ERROR: data_buffer_data NULL access\n");
     return NULL;
   }
   return b->data;
