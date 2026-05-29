@@ -9,7 +9,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-#include "instrument-data/instrument-data-export.h"
+#include "instrument-data-export.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>

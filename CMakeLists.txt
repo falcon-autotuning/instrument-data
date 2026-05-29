@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(
   instrument-data
-  VERSION 1.1.2
+  VERSION 1.1.3
   DESCRIPTION "An cross OS shared memory platform for collecting scientific data from instruments"
   HOMEPAGE_URL "https://github.com/falcon-autotuning/instrument-data"
   LANGUAGES C
@@ -73,7 +73,7 @@ target_include_directories(instrument-data
 
 include(GenerateExportHeader)
 set(GENERATED_INCLUDE_DIR
-    ${CMAKE_CURRENT_BINARY_DIR}/include/instrument-data)
+    ${CMAKE_CURRENT_BINARY_DIR}/include/)
 file(MAKE_DIRECTORY ${GENERATED_INCLUDE_DIR})
 generate_export_header(instrument-data
   EXPORT_FILE_NAME
