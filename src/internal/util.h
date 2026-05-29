@@ -70,3 +70,9 @@ char *inst_make_name(const char *prefix);
  * If src is NULL, dst becomes an empty string.
  */
 void inst_strlcpy(char *dst, const char *src, size_t size);
+
+#ifdef ENABLE_DEBUG_LOGS
+#define LOG(...) fprintf(stderr, __VA_ARGS__)
+#else
+#define LOG(...) ((void)0)
+#endif

@@ -18,7 +18,7 @@
  * ============================================================ */
 static char *inst_make_buffer_id(void) {
   char *id = inst_make_name("buffer");
-  fprintf(stderr, "MAKE_BUFFER_ID → %p (%s)\n", (void *)id, id);
+  LOG(stderr, "MAKE_BUFFER_ID → %p (%s)\n", (void *)id, id);
   return id;
 }
 
@@ -42,14 +42,14 @@ static void init_impl(void) { mtx_init(&lock, mtx_plain); }
 static void init(void) { call_once(&init_once, init_impl); }
 
 static DataBuffer *lookup_buffer_no_lock(const char *id) {
-  fprintf(stderr, "LOOKUP: id=%s\n", id);
+  LOG(stderr, "LOOKUP: id=%s\n", id);
   MapEntry *e;
   HASH_FIND_STR(map, id, e);
   return e ? e->buf : NULL;
 }
 
 static void insert_buffer(const char *id, DataBuffer *buffer) {
-  fprintf(stderr, "INSERT: id=%s\n", id);
+  LOG(stderr, "INSERT: id=%s\n", id);
   MapEntry *e = malloc(sizeof(MapEntry));
   e->id = inst_strdup(id);
   e->buf = buffer;
@@ -109,7 +109,7 @@ static DataBuffer *_get_buffer_internal(const char *id) {
   if (!id || id[0] == '\0')
     return NULL;
 
-  fprintf(stderr, "INTERNAL GET: id=%s\n", id);
+  LOG(stderr, "INTERNAL GET: id=%s\n", id);
 
   DataBuffer *b = lookup_buffer_no_lock(id);
   if (b) {

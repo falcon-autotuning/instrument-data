@@ -43,7 +43,8 @@
         "VCPKG_TARGET_TRIPLET": "x64-linux-dynamic",
         "CMAKE_PREFIX_PATH": "${sourceDir}/vcpkg_installed/x64-linux-dynamic/share;${sourceDir}/vcpkg_installed",
         "CMAKE_EXE_LINKER_FLAGS": "-fuse-ld=lld",
-        "CMAKE_SHARED_LINKER_FLAGS": "-fuse-ld=lld"
+        "CMAKE_SHARED_LINKER_FLAGS": "-fuse-ld=lld",
+        "DENABLE_DEBUG_LOGS": true 
       }
     },
     {
@@ -67,7 +68,8 @@
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_C_COMPILER": "gcc",
         "VCPKG_TARGET_TRIPLET": "x64-linux-dynamic",
-        "CMAKE_PREFIX_PATH": "${sourceDir}/vcpkg_installed/x64-linux-dynamic/share;${sourceDir}/vcpkg_installed"
+        "CMAKE_PREFIX_PATH": "${sourceDir}/vcpkg_installed/x64-linux-dynamic/share;${sourceDir}/vcpkg_installed",
+        "DENABLE_DEBUG_LOGS": true 
       }
     },
     {
@@ -94,7 +96,8 @@
         "CMAKE_C_FLAGS": "/Zi /Od /RTC1",
         "CMAKE_CXX_FLAGS": "/Zi /Od /RTC1",
         "CMAKE_EXE_LINKER_FLAGS": "/DEBUG",
-        "CMAKE_SHARED_LINKER_FLAGS": "/DEBUG"
+        "CMAKE_SHARED_LINKER_FLAGS": "/DEBUG",
+        "DENABLE_DEBUG_LOGS": true 
       }
     },
     {
@@ -114,7 +117,8 @@
         "CMAKE_CXX_FLAGS": "/Zi /Od -fsanitize=address",
 
         "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address",
-        "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address"
+        "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address",
+        "DENABLE_DEBUG_LOGS": true 
       }
     },
     {
@@ -141,7 +145,8 @@
         "CMAKE_EXE_LINKER_FLAGS": "-fuse-ld=lld -fsanitize=address",
         "CMAKE_SHARED_LINKER_FLAGS": "-fuse-ld=lld -fsanitize=address",
         "CMAKE_C_FLAGS": "-fsanitize=address -fno-omit-frame-pointer -g",
-        "CMAKE_CXX_FLAGS": "-fsanitize=address -fno-omit-frame-pointer -g"
+        "CMAKE_CXX_FLAGS": "-fsanitize=address -fno-omit-frame-pointer -g",
+        "DENABLE_DEBUG_LOGS": true 
       }
     },
     {
@@ -156,7 +161,8 @@
         "CMAKE_PREFIX_PATH": "${sourceDir}/vcpkg_installed/x64-linux-dynamic/share;${sourceDir}/vcpkg_installed",
         "CMAKE_C_FLAGS": "-fsanitize=thread -DUSE_TSAN -fno-omit-frame-pointer -g",
         "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=thread",
-        "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=thread"
+        "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=thread",
+        "DENABLE_DEBUG_LOGS": true 
       }
     }
   ],

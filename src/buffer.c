@@ -1,5 +1,6 @@
 #include "internal/buffer.h"
 #include "internal/shm.h"
+#include "internal/util.h"
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>

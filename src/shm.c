@@ -137,7 +137,7 @@ void *inst_shm_map(InstShmHandle *h) {
   HANDLE hm = OpenFileMapping(FILE_MAP_ALL_ACCESS, FALSE, h->name);
 
   if (!hm) {
-    fprintf(stderr, "OpenFileMapping failed (%s): %lu\n", h->name,
+    fprintf(stderr, "OpenFileMapping has failed (%s): %lu\n", h->name,
             GetLastError());
     return NULL;
   }
@@ -156,7 +156,7 @@ void *inst_shm_map(InstShmHandle *h) {
 }
 
 void inst_shm_unmap(InstShmHandle *h, void *ptr) {
-  fprintf(stderr, "CLOSE HANDLE: %s\n", h->name);
+  LOG(stderr, "CLOSE HANDLE: %s\n", h->name);
   if (ptr)
     UnmapViewOfFile(ptr);
 

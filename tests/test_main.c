@@ -61,23 +61,33 @@ static int child_server(int argc, char **argv) {
 
   const char *id = data_manager_create_buffer("inst", "persistent",
                                               INST_DATA_FLOAT64, 1, data);
-
+  fprintf(stderr, "The local ID is: %s\n", id);
   if (!id)
     return 2;
-
+  void *dataBuf = data_manager_get_buffer(id);
   printf("%s\n", id);
   fflush(stdout);
+  fprintf(stderr, "Printed the ID\n");
+
+  char name[256];
+  snprintf(name, sizeof(name), "Local\\shm_data_%s", id);
+
+  HANDLE h2 = OpenFileMapping(FILE_MAP_ALL_ACCESS, FALSE, name);
+
+  fprintf(stderr, "Self-open (%s): %p err=%lu\n", name, h2, GetLastError());
 
   // wait until parent confirms attach
   char buf[32];
   fgets(buf, sizeof(buf), stdin);
 
   while (fgets(buf, sizeof(buf), stdin)) {
+    fprintf(stderr, "In the loop\n");
     str_chomp(buf);
 
     if (str_eq(buf, "quit"))
       break;
   }
+  fprintf(stderr, "Exited loop, releasing buffer\n");
 
   data_manager_release_buffer(id);
 

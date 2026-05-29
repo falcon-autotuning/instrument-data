@@ -1,7 +1,12 @@
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 #include "instrument-data.h"
 #include "test_common.h"
 #include "test_config.h"
 #include <cmocka.h>
+#include <handleapi.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -11,8 +16,6 @@
 #ifndef _WIN32
 #include <sys/wait.h>
 #include <unistd.h>
-#else
-#include <windows.h>
 #endif
 
 static int str_eq(const char *a, const char *b) {
@@ -53,13 +56,48 @@ typedef struct {
   PROCESS_INFORMATION pi;
   HANDLE in_write;
   HANDLE out_read;
+  HANDLE err_read;
 #else
   pid_t pid;
   int in_fd;
   int out_fd;
+  int err_fd;
 #endif
 } ChildProcess;
 
+DWORD WINAPI forward_child_stderr(LPVOID param) {
+  HANDLE h = (HANDLE)param;
+
+  char buf[256];
+  DWORD bytes_read;
+
+  char line[512];
+  size_t line_len = 0;
+
+  while (ReadFile(h, buf, sizeof(buf), &bytes_read, NULL) && bytes_read > 0) {
+    for (DWORD i = 0; i < bytes_read; i++) {
+      char c = buf[i];
+
+      if (c == '\n') {
+        line[line_len] = '\0';
+        fprintf(stderr, "child: %s\n", line);
+        fflush(stderr);
+        line_len = 0;
+      } else if (line_len < sizeof(line) - 1) {
+        line[line_len++] = c;
+      }
+    }
+  }
+
+  // flush partial line at EOF
+  if (line_len > 0) {
+    line[line_len] = '\0';
+    fprintf(stderr, "child: %s\n", line);
+    fflush(stderr);
+  }
+
+  return 0;
+}
 static ChildProcess spawn_persistent_child(void) {
   ChildProcess proc = {0};
 
@@ -68,28 +106,34 @@ static ChildProcess spawn_persistent_child(void) {
 
   HANDLE in_read, in_write;
   HANDLE out_read, out_write;
+  HANDLE err_read, err_write;
 
   CreatePipe(&in_read, &in_write, &sa, 0);
   CreatePipe(&out_read, &out_write, &sa, 0);
+  CreatePipe(&err_read, &err_write, &sa, 0);
+
   SetHandleInformation(in_write, HANDLE_FLAG_INHERIT, 0);
   SetHandleInformation(out_read, HANDLE_FLAG_INHERIT, 0);
+  SetHandleInformation(err_read, HANDLE_FLAG_INHERIT, 0);
 
   STARTUPINFO si = {0};
   si.cb = sizeof(si);
   si.hStdInput = in_read;
   si.hStdOutput = out_write;
+  si.hStdError = err_write;
   si.dwFlags |= STARTF_USESTDHANDLES;
-
   char cmd[512];
   snprintf(cmd, sizeof(cmd), "\"%s\" --child server", TEST_BINARY_PATH);
-
   CreateProcess(NULL, cmd, NULL, NULL, TRUE, 0, NULL, NULL, &si, &proc.pi);
 
   CloseHandle(in_read);
   CloseHandle(out_write);
+  CloseHandle(err_write); // ✅ must close
 
   proc.in_write = in_write;
   proc.out_read = out_read;
+  proc.err_read = err_read;
+  CreateThread(NULL, 0, forward_child_stderr, proc.err_read, 0, NULL);
 
 #else
   int in_pipe[2];
@@ -382,12 +426,29 @@ static void test_write_then_crash(void **state) {
 
   data_manager_release_buffer(id);
 }
+static void str_chomp(char *s) {
+  if (!s)
+    return;
+  size_t len = strlen(s);
+  while (len > 0 && (s[len - 1] == '\n' || s[len - 1] == '\r')) {
+    s[--len] = '\0';
+  }
+}
 static void test_persistent_child_lifecycle(void **state) {
   (void)state;
 
   ChildProcess proc = spawn_persistent_child();
 
   char *id = read_line(&proc);
+  fprintf(stderr, "The id that we got from the child is: %s\n", id);
+  str_chomp(id);
+
+  char name[256];
+  snprintf(name, sizeof(name), "Local\\shm_data_%s", id);
+
+  HANDLE h2 = OpenFileMapping(FILE_MAP_ALL_ACCESS, FALSE, name);
+
+  fprintf(stderr, "Self-open (%s): %p err=%lu\n", name, h2, GetLastError());
 
   DataBuffer *b = data_manager_get_buffer(id);
   assert_non_null(b);
