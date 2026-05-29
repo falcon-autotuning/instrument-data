@@ -100,9 +100,6 @@ install(FILES
   ${GENERATED_INCLUDE_DIR}/instrument-data-export.h
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/instrument-data
 )
-install(FILES cmake/embed_bundle.cmake
-  DESTINATION ${CMAKE_INSTALL_DATADIR}/instrument-data
-)
 install(TARGETS instrument-data
   EXPORT instrument-data-targets
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
