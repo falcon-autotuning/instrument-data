@@ -425,7 +425,7 @@ int main(int argc, char **argv) {
 
 #ifdef _WIN32
   for (int i = 0; i < NUM_WORKERS; i++) {
-    WaitForSingleObject(workers[i].pi.hProcess, INFINITE);
+    WaitForSingleObject(workers[i]->pi.hProcess, INFINITE);
   }
   DeleteCriticalSection(&log_lock);
 #else
