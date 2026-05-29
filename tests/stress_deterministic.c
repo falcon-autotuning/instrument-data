@@ -202,7 +202,7 @@ static WorkerProc *spawn_worker(const char *binary_path, const char *id) {
   si.dwFlags |= STARTF_USESTDHANDLES;
 
   char args[512];
-  snprintf(args, sizeof(args), "--worker %s", id);
+  snprintf(args, sizeof(args), "%s --worker %s", binary_path, id);
 
   // 3. FIXED CRASH BUG: Changed &wp.pi to &wp->pi
   BOOL ok = CreateProcess(binary_path, args, NULL, NULL, TRUE, 0, NULL, NULL,
