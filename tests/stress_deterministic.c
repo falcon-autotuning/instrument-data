@@ -130,12 +130,13 @@ static void make_worker_tag(char *out, size_t sz) {
  * Spawn worker
  * ============================================================ */
 #ifdef _WIN32
+static CRITICAL_SECTION log_lock;
+static BOOL log_lock_initialized = FALSE;
+
 DWORD WINAPI forward_stderr_thread(LPVOID param) {
   WorkerProc *wp = (WorkerProc *)param;
-
   char buf[256];
   DWORD bytes_read;
-
   char line[512];
   size_t line_len = 0;
 
@@ -146,8 +147,13 @@ DWORD WINAPI forward_stderr_thread(LPVOID param) {
 
       if (c == '\n') {
         line[line_len] = '\0';
+
+        // 2. Lock before printing to stop interleaving/nesting
+        EnterCriticalSection(&log_lock);
         fprintf(stderr, "%s: %s\n", wp->tag, line);
         fflush(stderr);
+        LeaveCriticalSection(&log_lock);
+
         line_len = 0;
       } else if (line_len < sizeof(line) - 1) {
         line[line_len++] = c;
@@ -157,19 +163,26 @@ DWORD WINAPI forward_stderr_thread(LPVOID param) {
 
   if (line_len > 0) {
     line[line_len] = '\0';
+    EnterCriticalSection(&log_lock);
     fprintf(stderr, "%s: %s\n", wp->tag, line);
     fflush(stderr);
+    LeaveCriticalSection(&log_lock);
   }
 
   return 0;
 }
-static WorkerProc *spawn_worker(const char *binary_path, const char *id) {
-  WorkerProc *wp = calloc(1, sizeof(WorkerProc));
 
+static WorkerProc *spawn_worker(const char *binary_path, const char *id) {
+  // Initialize the lock once on the very first worker spawn
+  if (!log_lock_initialized) {
+    InitializeCriticalSection(&log_lock);
+    log_lock_initialized = TRUE;
+  }
+
+  WorkerProc *wp = calloc(1, sizeof(WorkerProc));
   make_worker_tag(wp->tag, sizeof(wp->tag));
 
   SECURITY_ATTRIBUTES sa = {sizeof(sa), NULL, TRUE};
-
   HANDLE in_r, in_w;
   HANDLE out_r, out_w;
   HANDLE err_r, err_w;
@@ -192,8 +205,9 @@ static WorkerProc *spawn_worker(const char *binary_path, const char *id) {
   char args[512];
   snprintf(args, sizeof(args), "--worker %s", id);
 
+  // 3. FIXED CRASH BUG: Changed &wp.pi to &wp->pi
   BOOL ok = CreateProcess(binary_path, args, NULL, NULL, TRUE, 0, NULL, NULL,
-                          &si, &wp.pi);
+                          &si, &wp->pi);
 
   if (!ok) {
     fprintf(stderr, "CreateProcess failed: %lu\n", GetLastError());
@@ -207,7 +221,6 @@ static WorkerProc *spawn_worker(const char *binary_path, const char *id) {
   wp->out_read = out_r;
   wp->err_read = err_r;
 
-  // start stderr forward thread
   CreateThread(NULL, 0, forward_stderr_thread, wp, 0, NULL);
 
   return wp;
@@ -415,6 +428,7 @@ int main(int argc, char **argv) {
   for (int i = 0; i < NUM_WORKERS; i++) {
     WaitForSingleObject(workers[i].pi.hProcess, INFINITE);
   }
+  DeleteCriticalSection(&log_lock);
 #else
   for (int i = 0; i < NUM_WORKERS; i++) {
     wait(NULL);
