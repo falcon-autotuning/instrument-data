@@ -1,5 +1,4 @@
 #include "instrument-data.h"
-#include "test_config.h"
 #include <cmocka.h>
 
 #include <stdio.h>
