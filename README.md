@@ -1,6 +1,6 @@
 # Instrument Data Library
 
-A high-performance, cross-process shared memory data exchange library written in C99.
+A high-performance, cross-process shared memory data exchange library.
 
 ## Overview
 
