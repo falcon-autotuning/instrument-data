@@ -69,12 +69,12 @@ static int child_server(int argc, char **argv) {
   fflush(stdout);
   fprintf(stderr, "Printed the ID\n");
 
+#ifdef _WIN32
   char name[256];
   snprintf(name, sizeof(name), "Local\\shm_data_%s", id);
-
   HANDLE h2 = OpenFileMapping(FILE_MAP_ALL_ACCESS, FALSE, name);
-
   fprintf(stderr, "Self-open (%s): %p err=%lu\n", name, h2, GetLastError());
+#endif
 
   // wait until parent confirms attach
   char buf[32];

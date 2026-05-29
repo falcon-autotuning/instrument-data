@@ -1,12 +1,12 @@
 #ifdef _WIN32
 #include <windows.h>
+#include <handleapi.h>
 #endif
 
 #include "instrument-data.h"
 #include "test_common.h"
 #include "test_config.h"
 #include <cmocka.h>
-#include <handleapi.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -64,7 +64,7 @@ typedef struct {
   int err_fd;
 #endif
 } ChildProcess;
-
+#ifdef _WIN32
 DWORD WINAPI forward_child_stderr(LPVOID param) {
   HANDLE h = (HANDLE)param;
 
@@ -98,6 +98,7 @@ DWORD WINAPI forward_child_stderr(LPVOID param) {
 
   return 0;
 }
+#endif
 static ChildProcess spawn_persistent_child(void) {
   ChildProcess proc = {0};
 
@@ -443,12 +444,12 @@ static void test_persistent_child_lifecycle(void **state) {
   fprintf(stderr, "The id that we got from the child is: %s\n", id);
   str_chomp(id);
 
+#ifdef _WIN32
   char name[256];
   snprintf(name, sizeof(name), "Local\\shm_data_%s", id);
-
   HANDLE h2 = OpenFileMapping(FILE_MAP_ALL_ACCESS, FALSE, name);
-
   fprintf(stderr, "Self-open (%s): %p err=%lu\n", name, h2, GetLastError());
+#endif
 
   DataBuffer *b = data_manager_get_buffer(id);
   assert_non_null(b);
