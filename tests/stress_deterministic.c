@@ -163,7 +163,7 @@ DWORD WINAPI forward_stderr_thread(LPVOID param) {
 
   return 0;
 }
-static WorkerProc *spawn_worker(const char *id) {
+static WorkerProc *spawn_worker(const char *binary_path, const char *id) {
   WorkerProc *wp = calloc(1, sizeof(WorkerProc));
 
   make_worker_tag(wp->tag, sizeof(wp->tag));
@@ -192,8 +192,8 @@ static WorkerProc *spawn_worker(const char *id) {
   char args[512];
   snprintf(args, sizeof(args), "--worker %s", id);
 
-  BOOL ok = CreateProcess(TEST_BINARY_PATH, args, NULL, NULL, TRUE, 0, NULL,
-                          NULL, &si, &wp.pi);
+  BOOL ok = CreateProcess(binary_path, args, NULL, NULL, TRUE, 0, NULL, NULL,
+                          &si, &wp.pi);
 
   if (!ok) {
     fprintf(stderr, "CreateProcess failed: %lu\n", GetLastError());
@@ -203,12 +203,12 @@ static WorkerProc *spawn_worker(const char *id) {
   CloseHandle(out_w);
   CloseHandle(err_w);
 
-  wp.in_write = in_w;
-  wp.out_read = out_r;
-  wp.err_read = err_r;
+  wp->in_write = in_w;
+  wp->out_read = out_r;
+  wp->err_read = err_r;
 
   // start stderr forward thread
-  CreateThread(NULL, 0, forward_stderr_thread, &wp, 0, NULL);
+  CreateThread(NULL, 0, forward_stderr_thread, wp, 0, NULL);
 
   return wp;
 }
@@ -348,6 +348,9 @@ int main(int argc, char **argv) {
     str_chomp(safe_arg);
     fprintf(stderr, "The ID for the worker is %s\n", safe_arg);
     return worker_main(safe_arg);
+  } else if (argc != 1) {
+    fprintf(stderr, "Usage: %s [--worker <id>]\n", argv[0]);
+    return 1;
   }
 
   /* setup */
