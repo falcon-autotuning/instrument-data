@@ -17,7 +17,9 @@ extern "C" {
 /**
  * @brief Supported data types for buffers.
  */
-typedef enum {
+typedef uint8_t ArrayType;
+
+enum {
   INST_DATA_FLOAT32 = 0,
   INST_DATA_FLOAT64,
   INST_DATA_INT32,
@@ -25,7 +27,7 @@ typedef enum {
   INST_DATA_UINT32,
   INST_DATA_UINT64,
   INST_DATA_UINT8
-} ArrayType;
+};
 
 /**
  * @brief Opaque handle representing a shared memory-backed data buffer.

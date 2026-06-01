@@ -1,6 +1,6 @@
 {
   "name": "instrument-data",
-  "version-string": "1.1.4",
+  "version-string": "1.1.5",
   "description": "An cross OS shared memory platform for collecting scientific data from instruments",
   "dependencies": [
     "uthash",
