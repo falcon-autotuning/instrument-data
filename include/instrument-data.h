@@ -1,7 +1,7 @@
 #pragma once
 
 /** Maximum length for string fields in metadata (including null terminator). */
-#define INST_MAX_STRING_LEN 64
+#define INST_MAX_STRING_LEN PLUGIN_MAX_STRING_LEN
 
 /** Maximum number of simultaneous process owners of a buffer. */
 #define INST_MAX_OWNERS 32
@@ -13,21 +13,7 @@ extern "C" {
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-
-/**
- * @brief Supported data types for buffers.
- */
-typedef uint8_t ArrayType;
-
-enum {
-  INST_DATA_FLOAT32 = 0,
-  INST_DATA_FLOAT64,
-  INST_DATA_INT32,
-  INST_DATA_INT64,
-  INST_DATA_UINT32,
-  INST_DATA_UINT64,
-  INST_DATA_UINT8
-};
+#include <instrument-plugin.h>
 
 /**
  * @brief Opaque handle representing a shared memory-backed data buffer.
