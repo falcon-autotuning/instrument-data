@@ -1,3 +1,4 @@
+#include "process.h"
 #ifdef _WIN32
 #include <windows.h>
 #include <handleapi.h>
@@ -444,6 +445,11 @@ static void test_persistent_child_lifecycle(void **state) {
   fprintf(stderr, "The id that we got from the child is: %s\n", id);
   str_chomp(id);
 
+  /* 1. Before attaching: only child owns it */
+  SharedMetadata meta_before;
+  assert_true(data_manager_get_metadata(id, &meta_before));
+  assert_int_equal(meta_before.global_ref_count, 1);
+
 #ifdef _WIN32
   char name[256];
   snprintf(name, sizeof(name), "Local\\shm_data_%s", id);
@@ -451,16 +457,22 @@ static void test_persistent_child_lifecycle(void **state) {
   fprintf(stderr, "Self-open (%s): %p err=%lu\n", name, h2, GetLastError());
 #endif
 
+  /* 2. Parent attaches */
   DataBuffer *b = data_manager_get_buffer(id);
   assert_non_null(b);
+
+  /* Now we should have 2 owners */
+  SharedMetadata meta_after_attach;
+  assert_true(data_manager_get_metadata(id, &meta_after_attach));
+  assert_int_equal(meta_after_attach.global_ref_count, 2);
 
   // tell child it's safe
   send_command(&proc, "attached");
 
-  assert_non_null(b);
   double *d = data_buffer_data(b);
   assert_float_equal(d[0], 99.0, TEST_EPSILON);
 
+  /* 3. Kill child */
   send_command(&proc, "quit");
 
 #ifdef _WIN32
@@ -470,6 +482,15 @@ static void test_persistent_child_lifecycle(void **state) {
   waitpid(proc.pid, &status, 0);
   assert_true(WIFEXITED(status));
 #endif
+
+  SharedMetadata meta_after_child_exit;
+  assert_true(data_manager_get_metadata(id, &meta_after_child_exit));
+
+  /* Now only parent should remain */
+  assert_int_equal(meta_after_child_exit.global_ref_count, 1);
+  uint32_t pid = inst_get_pid();
+  assert_int_equal(meta_after_child_exit.owners[0], pid);
+
   double *d2 = data_buffer_data(b);
   assert_float_equal(d2[0], 99.0, TEST_EPSILON);
 

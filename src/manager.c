@@ -12,7 +12,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
 /* ============================================================
  * Helpers
  * ============================================================ */
@@ -169,8 +168,9 @@ static DataBuffer *_get_buffer_internal(const char *id) {
 
   /* ✅ CRITICAL VALIDATION FIX */
   if (meta->element_count == 0 || meta->byte_size == 0) {
-    fprintf(stderr, "ERROR: INVALID META AFTER MAP: id=%s count=%zu bytes=%zu\n",
-            id, (size_t)meta->element_count, (size_t)meta->byte_size);
+    fprintf(stderr,
+            "ERROR: INVALID META AFTER MAP: id=%s count=%zu bytes=%zu\n", id,
+            (size_t)meta->element_count, (size_t)meta->byte_size);
 
     inst_shm_unmap(&sd, ptr);
     inst_shm_unmap(&sm, meta);
@@ -259,12 +259,11 @@ const char *data_manager_create_buffer(const char *instrument,
   meta->type = type;
   meta->element_count = count;
   meta->byte_size = bytes;
-  meta->timestamp_ms = 0;
+  meta->timestamp_ms = inst_get_timestamp_ms();
 
   meta->global_ref_count = 1;
   meta->owners[0] = inst_get_pid();
 
-  /* ✅ CRITICAL: visibility across processes */
   atomic_thread_fence(memory_order_seq_cst);
 
   DataBuffer *buffer = calloc(1, sizeof(DataBuffer));
@@ -343,7 +342,6 @@ DataBuffer *data_manager_get_buffer(const char *id) {
 
   inst_ipc_mutex_lock(b->mutex);
 
-  /* ✅ SAFETY: validate metadata before use */
   if (!b->meta || b->meta->element_count == 0) {
     fprintf(stderr, "ERROR: INVALID BUFFER META: id=%s\n", safe_id);
     inst_ipc_mutex_unlock(b->mutex);
@@ -352,6 +350,12 @@ DataBuffer *data_manager_get_buffer(const char *id) {
   }
 
   cleanup_dead_owners(b);
+
+  if (b->meta->global_ref_count == 0) {
+    inst_ipc_mutex_unlock(b->mutex);
+    data_buffer_unref(b);
+    return NULL;
+  }
 
   uint32_t pid = inst_get_pid();
   bool found = false;
@@ -479,6 +483,10 @@ bool data_manager_get_metadata(const char *id, SharedMetadata *out_meta) {
   mtx_unlock(&lock);
 
   if (buffer) {
+    if (buffer->meta->global_ref_count == 0) {
+      inst_ipc_mutex_unlock(buffer->mutex);
+      return false;
+    }
     inst_ipc_mutex_lock(buffer->mutex);
 
     memcpy(out_meta, buffer->meta, sizeof(SharedMetadata));

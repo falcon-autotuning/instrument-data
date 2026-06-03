@@ -1,6 +1,8 @@
 #pragma once
 
 #include <stddef.h>
+#include <stdint.h>
+#include "instrument-data-export.h"
 
 /**
  * @file util.h
@@ -70,6 +72,11 @@ char *inst_make_name(const char *prefix);
  * If src is NULL, dst becomes an empty string.
  */
 void inst_strlcpy(char *dst, const char *src, size_t size);
+
+/**
+ * @brief Gets the current timestamp in milliseconds
+ */
+INSTRUMENT_DATA_EXPORT uint64_t inst_get_timestamp_ms(void);
 
 #ifdef ENABLE_DEBUG_LOGS
 #define LOG(...) fprintf(stderr, __VA_ARGS__)

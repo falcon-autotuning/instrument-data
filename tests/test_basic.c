@@ -1,22 +1,85 @@
 #include "instrument-data.h"
+#include "process.h"
+#include "util.h"
 #include "test_common.h"
 #include <cmocka.h>
 #include <stdlib.h>
+#include <string.h>
 static void test_create_and_metadata(void **state) {
   (void)state;
+
   float data[4] = {1, 2, 3, 4};
 
-  const char *id =
-      data_manager_create_buffer("inst", "cmd", INST_DATA_FLOAT32, 4, data);
+  const char *instrument = "inst";
+  const char *command_id = "cmd";
 
+  const char *id = data_manager_create_buffer(instrument, command_id,
+                                              INST_DATA_FLOAT32, 4, data);
   assert_non_null(id);
 
   SharedMetadata meta;
   bool ok = data_manager_get_metadata(id, &meta);
   assert_true(ok);
 
+  assert_string_equal(meta.buffer_id, id);
+  assert_string_equal(meta.instrument_name, instrument);
+  assert_string_equal(meta.command_id, command_id);
+  assert_int_equal(meta.type, INST_DATA_FLOAT32);
   assert_int_equal(meta.element_count, 4);
   assert_int_equal(meta.byte_size, sizeof(data));
+  assert_true(meta.timestamp_ms > 0);
+
+  uint64_t now = inst_get_timestamp_ms();
+  assert_true(meta.timestamp_ms <= now);
+  assert_true((now - meta.timestamp_ms) < 500);
+
+  assert_int_equal(meta.global_ref_count, 1);
+
+  uint32_t pid = inst_get_pid();
+  assert_int_equal(meta.owners[0], pid);
+
+  for (size_t i = 1; i < INST_MAX_OWNERS; i++) {
+    assert_int_equal(meta.owners[i], 0);
+  }
+
+  data_manager_release_buffer(id);
+
+  SharedMetadata meta_after;
+  memset(&meta_after, 0xAB, sizeof(meta_after)); // poison to detect writes
+
+  bool ok_after = data_manager_get_metadata(id, &meta_after);
+  assert_false(ok_after);
+  for (size_t i = 0; i < sizeof(meta_after); i++) {
+    assert_int_equal(((unsigned char *)&meta_after)[i], 0xAB);
+  }
+}
+static void test_reference_counting(void **state) {
+  (void)state;
+
+  float data[2] = {1.0f, 2.0f};
+
+  const char *id =
+      data_manager_create_buffer("Test", "CMD", INST_DATA_FLOAT32, 2, data);
+
+  assert_non_null(id);
+
+  DataBuffer *buffer1 = data_manager_get_buffer(id);
+  DataBuffer *buffer2 = data_manager_get_buffer(id);
+  DataBuffer *buffer3 = data_manager_get_buffer(id);
+
+  assert_non_null(buffer1);
+  assert_non_null(buffer2);
+  assert_non_null(buffer3);
+
+  SharedMetadata meta;
+  assert_true(data_manager_get_metadata(id, &meta));
+  assert_int_equal(meta.global_ref_count, 1);
+
+  data_manager_release_buffer(id);
+
+  DataBuffer *buffer4 = data_manager_get_buffer(id);
+  assert_null(buffer4);
+  assert_false(data_manager_get_metadata(id, &meta));
 }
 
 static void test_data_integrity(void **state) {
@@ -118,6 +181,7 @@ const struct CMUnitTest test_basic_tests[] = {
     cmocka_unit_test(test_add_offset),
     cmocka_unit_test(test_multiply_gain),
     cmocka_unit_test(test_zero_copy_create),
+    cmocka_unit_test(test_reference_counting),
 };
 
 const size_t test_basic_tests_count =

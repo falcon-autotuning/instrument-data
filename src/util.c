@@ -127,3 +127,32 @@ void inst_strlcpy(char *dst, const char *src, size_t size) {
   /* always null terminate */
   dst[i] = '\0';
 }
+
+#ifdef _WIN32
+#include <windows.h>
+
+/* Windows FILETIME is 100ns since Jan 1 1601 (UTC) */
+uint64_t inst_get_timestamp_ms(void) {
+  FILETIME ft;
+  GetSystemTimeAsFileTime(&ft);
+
+  ULARGE_INTEGER uli;
+  uli.LowPart = ft.dwLowDateTime;
+  uli.HighPart = ft.dwHighDateTime;
+
+  /* Convert to Unix epoch (Jan 1 1970) */
+  const uint64_t EPOCH_DIFF = 116444736000000000ULL;
+
+  return (uli.QuadPart - EPOCH_DIFF) / 10000ULL; /* 100ns -> ms */
+}
+
+#else
+#include <time.h>
+
+uint64_t inst_get_timestamp_ms(void) {
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+
+  return (uint64_t)ts.tv_sec * 1000ULL + (uint64_t)ts.tv_nsec / 1000000ULL;
+}
+#endif
