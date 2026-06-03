@@ -10,10 +10,8 @@ Key features include:
 
 - Zero-copy shared memory buffers
 - Cross-process data access
-- Reference-counted buffer lifecycle management
 - Built-in metadata tracking
 - Thread-safe and process-safe operations
-- Deterministic and stress-tested concurrency behavior
 
 ---
 
