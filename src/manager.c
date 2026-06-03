@@ -478,42 +478,24 @@ bool data_manager_get_metadata(const char *id, SharedMetadata *out_meta) {
     return false;
   }
 
+  char safe_id[INST_MAX_STRING_LEN];
+  inst_strlcpy(safe_id, id, sizeof(safe_id));
   mtx_lock(&lock);
-  DataBuffer *buffer = lookup_buffer_no_lock(id);
+  DataBuffer *buffer = _get_buffer_internal(safe_id);
   mtx_unlock(&lock);
 
-  if (buffer) {
-    if (buffer->meta->global_ref_count == 0) {
-      inst_ipc_mutex_unlock(buffer->mutex);
-      return false;
-    }
-    inst_ipc_mutex_lock(buffer->mutex);
+  if (!buffer) {
+    return false;
+  }
 
-    memcpy(out_meta, buffer->meta, sizeof(SharedMetadata));
-
+  inst_ipc_mutex_lock(buffer->mutex);
+  if (buffer->meta->global_ref_count == 0) {
     inst_ipc_mutex_unlock(buffer->mutex);
-    return true;
-  }
-
-  char *meta_name = inst_build_shm_name(id, "meta");
-  if (!meta_name)
-    return false;
-
-  InstShmHandle sm = inst_shm_handle_init();
-  sm.name = meta_name;
-  sm.size = sizeof(SharedMetadata);
-
-  SharedMetadata *meta = inst_shm_map(&sm);
-
-  if (!meta) {
-    free(meta_name);
     return false;
   }
 
-  memcpy(out_meta, meta, sizeof(SharedMetadata));
+  memcpy(out_meta, buffer->meta, sizeof(SharedMetadata));
 
-  inst_shm_unmap(&sm, meta);
-  free(meta_name);
-
+  inst_ipc_mutex_unlock(buffer->mutex);
   return true;
 }
