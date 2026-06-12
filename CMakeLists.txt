@@ -11,7 +11,7 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_C_VISIBILITY_PRESET hidden)
 set(CMAKE_VISIBILITY_INLINES_HIDDEN YES)
-option(BUILD_TESTS "Enable building tests" ON)
+option(BUILD_TESTS "Enable building tests" OFF)
 option(USE_CCACHE "Enable ccache or sccache if available" ON)
 option(ENABLE_PCH
        "Enable target_precompile_headers to speed up builds (opt-in)" ON)
@@ -115,7 +115,7 @@ install(EXPORT instrument-data-targets
 write_basic_package_version_file(
   "${CMAKE_CURRENT_BINARY_DIR}/instrument-data-config-version.cmake"
   VERSION ${PROJECT_VERSION}
-  COMPATIBILITY AnyNewerVersion
+  COMPATIBILITY SameMajorVersion
 )
 configure_package_config_file(
   cmake/instrument-data-config.cmake.in
