@@ -1,14 +1,10 @@
 {
   "name": "instrument-data",
-  "version-string": "1.1.7",
+  "version-string": "1.1.8",
   "description": "An cross OS shared memory platform for collecting scientific data from instruments",
   "dependencies": [
     "uthash",
-    "cmocka",
-    {
-      "name": "instrument-plugin-api",
-      "version>=": "1.0.4"
-    }
+    "cmocka"
   ],
   "builtin-baseline": "e5a1490e1409d175932ef6014519e9ae149ddb7c"
 }
